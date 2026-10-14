@@ -1,0 +1,124 @@
+@import "tailwindcss";
+
+/* ========================================================
+   DESIGN SYSTEM — NEO-BRUTALISM PHOTOBOOTH KIOS
+   Tailwind CSS v4 @theme tokens
+   ======================================================== */
+
+@theme inline {
+  /* ---- Color Palette ---- */
+  --color-ink: #000000;
+  --color-paper: #FFFBEB;
+  --color-white: #FFFFFF;
+  --color-brand-yellow: #FFDE00;
+  --color-brand-pink: #FF6BB5;
+  --color-brand-cyan: #4DD8FF;
+  --color-brand-green: #3DDC84;
+  --color-brand-red: #FF4D4D;
+  --color-brand-violet: #B197FC;
+
+  /* ---- Font Families (local system-safe) ---- */
+  --font-display: "Impact", "Arial Black", "Haettenschweiler", sans-serif;
+  --font-sans: "Segoe UI", "Roboto", system-ui, sans-serif;
+  --font-mono: "Cascadia Code", "Consolas", "Courier New", monospace;
+
+  /* ---- Border Widths ---- */
+  --border-width-3: 3px;
+  --border-width-4: 4px;
+
+  /* ---- Hard Shadows (Neo-Brutalism) ---- */
+  --shadow-brut-sm: 2px 2px 0 0 #000;
+  --shadow-brut: 4px 4px 0 0 #000;
+  --shadow-brut-lg: 6px 6px 0 0 #000;
+  --shadow-brut-xl: 8px 8px 0 0 #000;
+
+  /* ---- Animations ---- */
+  --animate-pop: pop 300ms steps(4) both;
+  --animate-flash: flash 180ms steps(3) forwards;
+  --animate-shake: shake 240ms steps(4);
+  --animate-wiggle: wiggle 1.2s steps(2) infinite;
+  --animate-pulse-brut: pulse-brut 2s steps(4) infinite;
+  --animate-countdown: countdown-tick 1s steps(1) infinite;
+
+  @keyframes pop {
+    0% { transform: scale(1.5); }
+    100% { transform: scale(1); }
+  }
+  @keyframes flash {
+    0% { opacity: 1; }
+    100% { opacity: 0; }
+  }
+  @keyframes shake {
+    0%, 100% { transform: translateX(0); }
+    25% { transform: translateX(-8px); }
+    75% { transform: translateX(8px); }
+  }
+  @keyframes wiggle {
+    0%, 100% { transform: rotate(-2deg); }
+    50% { transform: rotate(2deg); }
+  }
+  @keyframes pulse-brut {
+    0%, 100% { opacity: 1; }
+    50% { opacity: 0.7; }
+  }
+  @keyframes countdown-tick {
+    0%, 100% { transform: scale(1); }
+    50% { transform: scale(1.05); }
+  }
+}
+
+/* ========================================================
+   Global Base Styles — Kiosk Mode
+   ======================================================== */
+
+html, body {
+  height: 100%;
+}
+
+body {
+  background-color: #FFFBEB;
+  background-image: radial-gradient(#00000020 1.5px, transparent 1.5px);
+  background-size: 24px 24px;
+  color: #000000;
+
+  /* Kiosk-safe */
+  user-select: none;
+  -webkit-user-select: none;
+  touch-action: manipulation;
+  overscroll-behavior: none;
+  -webkit-tap-highlight-color: transparent;
+}
+
+img {
+  -webkit-user-drag: none;
+  user-select: none;
+}
+
+/* Focus visible — accessibility */
+:focus-visible {
+  outline: 4px solid #000;
+  outline-offset: 4px;
+}
+
+/* Disabled stripes pattern */
+@layer utilities {
+  .disabled-stripes {
+    background-image: repeating-linear-gradient(45deg, #E5E5E5 0 8px, #D4D4D4 8px 16px);
+    color: #525252;
+    box-shadow: none;
+  }
+
+  .text-outline {
+    -webkit-text-stroke: 6px #000;
+    paint-order: stroke fill;
+    text-shadow: 8px 8px 0 #000;
+  }
+}
+
+/* Reduce motion for accessibility */
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after {
+    animation: none !important;
+    transition: none !important;
+  }
+}

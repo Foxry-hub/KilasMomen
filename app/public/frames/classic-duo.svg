@@ -1,0 +1,150 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1200 1800" width="1200" height="1800">
+  <defs>
+    <!-- Dot pattern for Neo-Brutalism paper feel -->
+    <pattern id="dot-grid" x="0" y="0" width="30" height="30" patternUnits="userSpaceOnUse">
+      <circle cx="3" cy="3" r="2.5" fill="#000000" fill-opacity="0.12" />
+    </pattern>
+
+    <!-- Clip mask to punch out the two photo slots -->
+    <mask id="cutout-mask">
+      <!-- White everywhere means opaque -->
+      <rect x="0" y="0" width="1200" height="1800" fill="white" />
+      <!-- Black rectangles punch transparent holes for the photos -->
+      <rect x="100" y="100" width="1000" height="700" fill="black" />
+      <rect x="100" y="850" width="1000" height="700" fill="black" />
+    </mask>
+  </defs>
+
+  <!-- ==================== BASE FRAME (with photo cutouts) ==================== -->
+  <g mask="url(#cutout-mask)">
+    <!-- Paper background -->
+    <rect x="0" y="0" width="1200" height="1800" fill="#FFFBEB" />
+    <!-- Subtle dot pattern overlay -->
+    <rect x="0" y="0" width="1200" height="1800" fill="url(#dot-grid)" />
+  </g>
+
+  <!-- ==================== OUTER CANVAS BORDER ==================== -->
+  <rect x="12" y="12" width="1176" height="1776" fill="none" stroke="#000000" stroke-width="24" />
+
+  <!-- Corner registration crosshairs -->
+  <g stroke="#000000" stroke-width="6">
+    <line x1="36" y1="56" x2="76" y2="56" />
+    <line x1="56" y1="36" x2="56" y2="76" />
+    <line x1="1124" y1="56" x2="1164" y2="56" />
+    <line x1="1144" y1="36" x2="1144" y2="76" />
+    <line x1="36" y1="1744" x2="76" y2="1744" />
+    <line x1="56" y1="1724" x2="56" y2="1764" />
+    <line x1="1124" y1="1744" x2="1164" y2="1744" />
+    <line x1="1144" y1="1724" x2="1144" y2="1764" />
+  </g>
+
+  <!-- ==================== PHOTO SLOT 1 (100, 100, 1000, 700) ==================== -->
+  <!-- Hard black border around slot 1 -->
+  <rect x="100" y="100" width="1000" height="700" fill="none" stroke="#000000" stroke-width="16" />
+
+  <!-- Slot 1 Brutalist Label Tag -->
+  <g transform="translate(116, 76)">
+    <!-- Shadow -->
+    <rect x="6" y="6" width="140" height="42" fill="#000000" />
+    <!-- Badge -->
+    <rect x="0" y="0" width="140" height="42" fill="#FFDE00" stroke="#000000" stroke-width="4" />
+    <text x="70" y="27" font-family="'Impact', 'Arial Black', sans-serif" font-size="20" font-weight="900" fill="#000000" text-anchor="middle" letter-spacing="1">SHOT 01</text>
+  </g>
+
+  <!-- Slot 1 Top-right sticker -->
+  <g transform="translate(1010, 76)">
+    <rect x="4" y="4" width="70" height="42" fill="#000000" />
+    <rect x="0" y="0" width="70" height="42" fill="#4DD8FF" stroke="#000000" stroke-width="4" />
+    <text x="35" y="27" font-family="'Impact', 'Arial Black', sans-serif" font-size="18" font-weight="bold" fill="#000000" text-anchor="middle">★ A ★</text>
+  </g>
+
+  <!-- ==================== PHOTO SLOT 2 (100, 850, 1000, 700) ==================== -->
+  <!-- Hard black border around slot 2 -->
+  <rect x="100" y="850" width="1000" height="700" fill="none" stroke="#000000" stroke-width="16" />
+
+  <!-- Slot 2 Brutalist Label Tag -->
+  <g transform="translate(116, 826)">
+    <!-- Shadow -->
+    <rect x="6" y="6" width="140" height="42" fill="#000000" />
+    <!-- Badge -->
+    <rect x="0" y="0" width="140" height="42" fill="#FF6BB5" stroke="#000000" stroke-width="4" />
+    <text x="70" y="27" font-family="'Impact', 'Arial Black', sans-serif" font-size="20" font-weight="900" fill="#000000" text-anchor="middle" letter-spacing="1">SHOT 02</text>
+  </g>
+
+  <!-- Slot 2 Top-right sticker -->
+  <g transform="translate(1010, 826)">
+    <rect x="4" y="4" width="70" height="42" fill="#000000" />
+    <rect x="0" y="0" width="70" height="42" fill="#3DDC84" stroke="#000000" stroke-width="4" />
+    <text x="35" y="27" font-family="'Impact', 'Arial Black', sans-serif" font-size="18" font-weight="bold" fill="#000000" text-anchor="middle">★ B ★</text>
+  </g>
+
+  <!-- ==================== FOOTER SECTION (y: 1550 - 1800) ==================== -->
+  <!-- Divider line -->
+  <line x1="40" y1="1560" x2="1160" y2="1560" stroke="#000000" stroke-width="8" stroke-dasharray="16 8" />
+
+  <!-- Main Banner Box -->
+  <g transform="translate(80, 1590)">
+    <!-- Hard shadow -->
+    <rect x="8" y="8" width="620" height="96" fill="#000000" />
+    <!-- Main Card -->
+    <rect x="0" y="0" width="620" height="96" fill="#FFDE00" stroke="#000000" stroke-width="6" />
+    <text x="30" y="66" font-family="'Impact', 'Arial Black', sans-serif" font-size="58" font-weight="900" fill="#000000" letter-spacing="3">PHOTOBOOTH</text>
+
+    <!-- Sub-tagline -->
+    <g transform="translate(0, 110)">
+      <text x="4" y="24" font-family="'Segoe UI', 'Roboto', sans-serif" font-size="20" font-weight="800" fill="#000000" letter-spacing="4">LOCAL HOST • OFFLINE EDITION</text>
+      <text x="4" y="48" font-family="'Courier New', monospace" font-size="16" font-weight="700" fill="#000000" fill-opacity="0.7">PRINTED WITH PRIDE • 4R DUO</text>
+    </g>
+  </g>
+
+  <!-- Right Side Badges -->
+  <g transform="translate(740, 1590)">
+    <!-- Badge 1: 4R STRIP -->
+    <g transform="translate(0, 0)">
+      <rect x="6" y="6" width="180" height="44" fill="#000000" />
+      <rect x="0" y="0" width="180" height="44" fill="#FF6BB5" stroke="#000000" stroke-width="4" />
+      <text x="90" y="30" font-family="'Impact', 'Arial Black', sans-serif" font-size="22" font-weight="900" fill="#000000" text-anchor="middle" letter-spacing="1">4R • 2 FOTO</text>
+    </g>
+
+    <!-- Badge 2: ORIGINAL -->
+    <g transform="translate(200, 0)">
+      <rect x="6" y="6" width="180" height="44" fill="#000000" />
+      <rect x="0" y="0" width="180" height="44" fill="#4DD8FF" stroke="#000000" stroke-width="4" />
+      <text x="90" y="30" font-family="'Impact', 'Arial Black', sans-serif" font-size="22" font-weight="900" fill="#000000" text-anchor="middle" letter-spacing="1">ORIGINAL</text>
+    </g>
+
+    <!-- Stylized Barcode Graphic -->
+    <g transform="translate(0, 68)">
+      <rect x="0" y="0" width="380" height="74" fill="#FFFFFF" stroke="#000000" stroke-width="4" />
+      <!-- Barcode lines -->
+      <g fill="#000000">
+        <rect x="20" y="10" width="6" height="38" />
+        <rect x="32" y="10" width="3" height="38" />
+        <rect x="40" y="10" width="8" height="38" />
+        <rect x="54" y="10" width="4" height="38" />
+        <rect x="64" y="10" width="10" height="38" />
+        <rect x="80" y="10" width="4" height="38" />
+        <rect x="90" y="10" width="12" height="38" />
+        <rect x="108" y="10" width="6" height="38" />
+        <rect x="120" y="10" width="4" height="38" />
+        <rect x="130" y="10" width="14" height="38" />
+        <rect x="150" y="10" width="6" height="38" />
+        <rect x="162" y="10" width="10" height="38" />
+        <rect x="178" y="10" width="4" height="38" />
+        <rect x="188" y="10" width="8" height="38" />
+        <rect x="202" y="10" width="12" height="38" />
+        <rect x="220" y="10" width="4" height="38" />
+        <rect x="230" y="10" width="14" height="38" />
+        <rect x="250" y="10" width="6" height="38" />
+        <rect x="262" y="10" width="4" height="38" />
+        <rect x="272" y="10" width="12" height="38" />
+        <rect x="290" y="10" width="4" height="38" />
+        <rect x="300" y="10" width="10" height="38" />
+        <rect x="316" y="10" width="6" height="38" />
+        <rect x="328" y="10" width="12" height="38" />
+        <rect x="346" y="10" width="8" height="38" />
+      </g>
+      <text x="190" y="64" font-family="'Courier New', monospace" font-size="14" font-weight="bold" fill="#000000" text-anchor="middle" letter-spacing="3">TRX-CLASSIC-DUO-2026</text>
+    </g>
+  </g>
+</svg>
