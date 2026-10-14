@@ -1,12 +1,12 @@
 import { NextResponse } from "next/server";
-import { transactions } from "@/lib/store";
+import { prisma } from "@/lib/prisma";
 
 export async function PATCH(
   _request: Request,
   { params }: { params: Promise<{ id: string }> }
 ) {
   const { id } = await params;
-  const trx = transactions.get(id);
+  const trx = await prisma.transaction.findUnique({ where: { id } });
 
   if (!trx) {
     return NextResponse.json({ error: "Transaksi tidak ditemukan" }, { status: 404 });
@@ -19,7 +19,10 @@ export async function PATCH(
     );
   }
 
-  trx.status = "CANCELLED";
+  const updated = await prisma.transaction.update({
+    where: { id },
+    data: { status: "CANCELLED" },
+  });
 
-  return NextResponse.json(trx);
+  return NextResponse.json(updated);
 }

@@ -1,14 +1,11 @@
 import { NextResponse } from "next/server";
+import path from "path";
 import {
-  invoicesByToken,
-  invoicesBySession,
   generateInvoiceNumber,
   generateToken,
   saveImageToDisk,
-  saveInvoiceMetadata,
-  findInvoice,
-  Invoice,
 } from "@/lib/store";
+import { prisma } from "@/lib/prisma";
 
 export async function POST(request: Request) {
   try {
@@ -22,13 +19,31 @@ export async function POST(request: Request) {
       );
     }
 
-    // Check if invoice already exists for this session
-    let existing = findInvoice(sessionId);
+    const existing = await prisma.invoice.findUnique({ where: { sessionId } });
     if (existing) {
-      existing.imageData = imageData;
-      existing.filter = filter || existing.filter;
-      saveImageToDisk(sessionId, imageData);
-      saveInvoiceMetadata(existing);
+      const imagePath = saveImageToDisk(sessionId, imageData);
+      if (!imagePath) {
+        return NextResponse.json({ error: "Gagal menyimpan file foto" }, { status: 500 });
+      }
+      const filePath = path.relative(process.cwd(), imagePath).replace(/\\/g, "/");
+      await prisma.$transaction([
+        prisma.photoSession.upsert({
+          where: { id: sessionId },
+          create: {
+            id: sessionId,
+            filter: filter || existing.filter,
+            finalImagePath: filePath,
+          },
+          update: {
+            filter: filter || existing.filter,
+            finalImagePath: filePath,
+          },
+        }),
+        prisma.invoice.update({
+          where: { id: existing.id },
+          data: { filePath, filter: filter || existing.filter },
+        }),
+      ]);
       return NextResponse.json({
         success: true,
         token: existing.token,
@@ -40,26 +55,39 @@ export async function POST(request: Request) {
     const token = generateToken(sessionId);
     const invoiceNumber = generateInvoiceNumber(sessionId);
 
-    // Save image to disk
-    saveImageToDisk(sessionId, imageData);
+    const imagePath = saveImageToDisk(sessionId, imageData);
+    if (!imagePath) {
+      return NextResponse.json({ error: "Gagal menyimpan file foto" }, { status: 500 });
+    }
+    const filePath = path.relative(process.cwd(), imagePath).replace(/\\/g, "/");
 
     const now = new Date();
     const expiresAt = new Date(now.getTime() + 7 * 24 * 60 * 60 * 1000).toISOString(); // 7 days
 
-    const newInvoice: Invoice = {
+    const newInvoice = {
       id: "inv_" + Date.now().toString(36),
       invoiceNumber,
       sessionId,
       token,
       filter: filter || "ORIGINAL",
-      imageData,
-      createdAt: now.toISOString(),
-      expiresAt,
+      filePath,
+      createdAt: now,
+      expiresAt: new Date(expiresAt),
     };
 
-    invoicesByToken.set(token, newInvoice);
-    invoicesBySession.set(sessionId, newInvoice);
-    saveInvoiceMetadata(newInvoice);
+    await prisma.photoSession.upsert({
+      where: { id: sessionId },
+      create: {
+        id: sessionId,
+        filter: newInvoice.filter,
+        finalImagePath: filePath,
+      },
+      update: {
+        filter: newInvoice.filter,
+        finalImagePath: filePath,
+      },
+    });
+    await prisma.invoice.create({ data: newInvoice });
 
     return NextResponse.json({
       success: true,
@@ -84,7 +112,11 @@ export async function GET(request: Request) {
     return NextResponse.json({ error: "Token atau sessionId wajib disertakan" }, { status: 400 });
   }
 
-  const invoice = findInvoice(token);
+  const invoice = token
+    ? await prisma.invoice.findFirst({
+        where: { OR: [{ token }, { sessionId: token }] },
+      })
+    : null;
 
   if (!invoice) {
     return NextResponse.json({ error: "Invoice tidak ditemukan" }, { status: 404 });

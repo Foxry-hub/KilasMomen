@@ -1,12 +1,12 @@
 import { NextResponse } from "next/server";
-import { transactions } from "@/lib/store";
+import { prisma } from "@/lib/prisma";
 
 export async function GET(
   _request: Request,
   { params }: { params: Promise<{ id: string }> }
 ) {
   const { id } = await params;
-  const trx = transactions.get(id);
+  const trx = await prisma.transaction.findUnique({ where: { id } });
 
   if (!trx) {
     return NextResponse.json({ error: "Transaksi tidak ditemukan" }, { status: 404 });
@@ -14,7 +14,11 @@ export async function GET(
 
   // Auto-expire check
   if (trx.status === "PENDING" && new Date(trx.expiresAt) < new Date()) {
-    trx.status = "EXPIRED";
+    const expired = await prisma.transaction.update({
+      where: { id },
+      data: { status: "EXPIRED" },
+    });
+    return NextResponse.json(expired);
   }
 
   return NextResponse.json(trx);

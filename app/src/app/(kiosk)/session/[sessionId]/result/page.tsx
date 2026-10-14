@@ -5,6 +5,7 @@ import { useRouter, useParams } from "next/navigation";
 import QRCode from "qrcode";
 import { Button } from "@/components/ui/Button";
 import { Stepper } from "@/components/ui/Stepper";
+import { getBaseUrl } from "@/lib/get-base-url";
 
 /* ================================================================
    RESULT CONTENT COMPONENT
@@ -23,9 +24,6 @@ function ResultContent() {
 
   // Network & URL states
   const [baseHostUrl, setBaseHostUrl] = useState<string>("");
-  const [detectedIps, setDetectedIps] = useState<string[]>([]);
-  const [customHostInput, setCustomHostInput] = useState<string>("");
-  const [showNetworkSettings, setShowNetworkSettings] = useState<boolean>(false);
   const [isZoomQr, setIsZoomQr] = useState<boolean>(false);
   const [copySuccess, setCopySuccess] = useState<boolean>(false);
 
@@ -61,15 +59,10 @@ function ResultContent() {
 
   // Initialize and synchronize invoice & QR Code
   useEffect(() => {
-    let storedImage: string | null = null;
     let storedFilter = "VINTAGE";
     let token = "";
 
     try {
-      storedImage = sessionStorage.getItem(`finalImage_${sessionId}`);
-      if (storedImage) {
-        setFinalImage(storedImage);
-      }
       storedFilter = sessionStorage.getItem(`filter_${sessionId}`) || "VINTAGE";
       setActiveFilterName(storedFilter);
 
@@ -82,61 +75,18 @@ function ResultContent() {
       // Storage fallback
     }
 
-    async function initNetworkAndInvoice() {
-      let finalHost = "";
-      const allDetected: string[] = [];
-
-      // Check saved custom base URL from localStorage
-      try {
-        const savedBase = localStorage.getItem("kiosk_custom_base_url");
-        if (savedBase) {
-          finalHost = savedBase;
-        }
-      } catch {
-        // Fallback
-      }
-
-      // If no custom host saved, fetch local network IP from API
-      if (!finalHost) {
-        try {
-          const netRes = await fetch("/api/network");
-          if (netRes.ok) {
-            const netData = await netRes.json();
-            if (netData.allIps && Array.isArray(netData.allIps)) {
-              allDetected.push(...netData.allIps);
-              setDetectedIps(netData.allIps);
-            }
-            if (typeof window !== "undefined" && window.location.hostname !== "localhost" && window.location.hostname !== "127.0.0.1") {
-              finalHost = window.location.origin;
-            } else if (netData.baseUrl) {
-              finalHost = netData.baseUrl;
-            }
-          }
-        } catch (e) {
-          console.warn("Network check error:", e);
-        }
-      }
-
-      if (!finalHost) {
-        finalHost = typeof window !== "undefined" ? window.location.origin : "http://localhost:3000";
-      }
+    async function initInvoice() {
+      // Prefer the public tunnel URL from the environment. When it is not set,
+      // use the origin that opened the kiosk so HTTPS and LAN access both work.
+      const finalHost = getBaseUrl();
 
       setBaseHostUrl(finalHost);
-      setCustomHostInput(finalHost);
 
-      // Ensure invoice is persisted to backend
+      // Finalize already persisted the image before this page was opened.
       let finalToken = token;
-      if (!finalToken && storedImage) {
+      if (!finalToken) {
         try {
-          const invRes = await fetch("/api/invoices", {
-            method: "POST",
-            headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({
-              sessionId,
-              imageData: storedImage,
-              filter: storedFilter,
-            }),
-          });
+          const invRes = await fetch(`/api/invoices?sessionId=${encodeURIComponent(sessionId)}`);
           if (invRes.ok) {
             const invData = await invRes.json();
             finalToken = invData.token;
@@ -144,19 +94,22 @@ function ResultContent() {
             sessionStorage.setItem(`invoiceToken_${sessionId}`, invData.token);
             sessionStorage.setItem(`invoiceNumber_${sessionId}`, invData.invoiceNumber);
           }
-        } catch (e) {
-          console.warn("Invoice sync error:", e);
+        } catch (error) {
+          console.error("Invoice lookup error:", error);
         }
       }
 
       const activeToken = finalToken || sessionId || "demo";
       setInvoiceToken(activeToken);
+      if (finalToken) {
+        setFinalImage(`/api/public/invoice/${finalToken}/image`);
+      }
 
       const targetUrl = `${finalHost}/invoice/${activeToken}`;
       generateQr(targetUrl);
     }
 
-    initNetworkAndInvoice();
+    initInvoice();
   }, [sessionId, generateQr]);
 
   // Regenerate QR when baseHostUrl or invoiceToken changes
@@ -217,26 +170,11 @@ function ResultContent() {
   const handleDownload = () => {
     if (!finalImage) return;
     const link = document.createElement("a");
-    link.href = finalImage;
+    link.href = `${finalImage}${finalImage.includes("?") ? "&" : "?"}download=1`;
     link.download = `photobooth_${invoiceCode || sessionId}.jpg`;
     document.body.appendChild(link);
     link.click();
     document.body.removeChild(link);
-  };
-
-  // Save custom base URL (e.g. Tunnel URL or specific Wi-Fi IP)
-  const handleSaveCustomHost = () => {
-    let clean = customHostInput.trim().replace(/\/+$/, "");
-    if (!clean.startsWith("http://") && !clean.startsWith("https://")) {
-      clean = "http://" + clean;
-    }
-    setBaseHostUrl(clean);
-    try {
-      localStorage.setItem("kiosk_custom_base_url", clean);
-    } catch {
-      // Fallback
-    }
-    setShowNetworkSettings(false);
   };
 
   // Copy link

@@ -4,6 +4,7 @@ import { useState, useEffect, useRef, useCallback, Suspense } from "react";
 import { useRouter, useParams, useSearchParams } from "next/navigation";
 import { Button } from "@/components/ui/Button";
 import { Stepper } from "@/components/ui/Stepper";
+import { clearSessionPhotos, saveSessionPhotos } from "@/lib/session-photo-storage";
 
 /* ================================================================
    SYNTHETIC AUDIO SOUNDS (Web Audio API - Offline-safe)
@@ -271,6 +272,16 @@ function CaptureContent() {
   const startPhotoSession = async () => {
     if (isShooting || !isCameraActive) return;
 
+    // Remove stale large data from previous sessions. Photo data is stored in IndexedDB.
+    try {
+      Object.keys(sessionStorage)
+        .filter((key) => /^(photos_|chosen_|finalImage_)/.test(key))
+        .forEach((key) => sessionStorage.removeItem(key));
+      await clearSessionPhotos(sessionId);
+    } catch (error) {
+      console.error("Failed to clear stale photo data:", error);
+    }
+
     setIsShooting(true);
     setCapturedPhotos([]);
     const photos: string[] = [];
@@ -299,11 +310,11 @@ function CaptureContent() {
     setCountdown(null);
     setIsShooting(false);
 
-    // Store captured photos in sessionStorage for selection step
+    // Store image data in IndexedDB; sessionStorage is too small for camera photos.
     try {
-      sessionStorage.setItem(`photos_${sessionId}`, JSON.stringify(photos));
-    } catch {
-      // Storage quota fallback
+      await saveSessionPhotos(sessionId, photos);
+    } catch (error) {
+      console.error("Failed to store captured photos:", error);
     }
 
     // Navigate to step 4: Photo Selection

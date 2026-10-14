@@ -5,6 +5,7 @@ import { useRouter, useParams, useSearchParams } from "next/navigation";
 import { Button } from "@/components/ui/Button";
 import { Stepper } from "@/components/ui/Stepper";
 import { getFrameBySlug, DEFAULT_FRAMES, Frame } from "@/lib/frames";
+import { clearSessionPhotos, getSessionPhotos } from "@/lib/session-photo-storage";
 
 /* ================================================================
    FILTER DEFINITIONS (8 Neo-Brutalism Curated Filters)
@@ -149,45 +150,41 @@ function FilterContent() {
   const [selectedFilter, setSelectedFilter] = useState<FilterConfig>(FILTERS[3]); // Default: VINTAGE
   const [isRendering, setIsRendering] = useState<boolean>(false);
   const [renderProgress, setRenderProgress] = useState<number>(0);
+  const [saveError, setSaveError] = useState<string>("");
 
   // Hidden canvas ref for final compositing
   const canvasRef = useRef<HTMLCanvasElement | null>(null);
 
-  // Load photos from sessionStorage
+  // Load image data from IndexedDB; sessionStorage is too small for camera photos.
   useEffect(() => {
-    try {
-      const stored = sessionStorage.getItem(`chosen_${sessionId}`);
-      if (stored) {
-        const parsed = JSON.parse(stored);
-        if (Array.isArray(parsed) && parsed.length >= 2) {
-          setPhotos([parsed[0], parsed[1]]);
+    void (async () => {
+      try {
+        const stored = await getSessionPhotos(sessionId);
+        if (stored?.photos && stored.chosen && stored.chosen.length >= 2) {
+          setPhotos(stored.chosen.map((index) => stored.photos[index]));
           setIsDemoMode(false);
           return;
         }
-      }
 
-      // Check raw shots if chosen photos not yet isolated
-      const allShots = sessionStorage.getItem(`photos_${sessionId}`);
-      if (allShots) {
-        const parsedShots = JSON.parse(allShots);
-        if (Array.isArray(parsedShots) && parsedShots.length >= 2) {
-          setPhotos([parsedShots[0], parsedShots[1]]);
+        if (stored?.photos && stored.photos.length >= 2) {
+          setPhotos([stored.photos[0], stored.photos[1]]);
           setIsDemoMode(false);
           return;
         }
-      }
 
-      // Fallback to demo mode
-      setIsDemoMode(true);
-    } catch {
-      setIsDemoMode(true);
-    }
+        setIsDemoMode(true);
+      } catch (error) {
+        console.error("Failed to load session photos:", error);
+        setIsDemoMode(true);
+      }
+    })();
   }, [sessionId]);
 
   /* ---- Render Final Image to 1200x1800 Canvas ---- */
   const handleProceedToPrint = async () => {
     if (isRendering) return;
     setIsRendering(true);
+    setSaveError("");
     setRenderProgress(15);
 
     try {
@@ -255,31 +252,35 @@ function FilterContent() {
 
       // 5. Export high-res JPEG
       const finalDataUrl = canvas.toDataURL("image/jpeg", 0.95);
-      sessionStorage.setItem(`finalImage_${sessionId}`, finalDataUrl);
       sessionStorage.setItem(`filter_${sessionId}`, selectedFilter.name);
 
       setRenderProgress(95);
 
-      // Save to backend server for phone QR scan & download
+      // Do not leave this page until the final image and invoice are persisted.
+      const sessionPhotoRecord = await getSessionPhotos(sessionId);
+      const res = await fetch(`/api/sessions/${sessionId}/finalize`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          imageBase64: finalDataUrl,
+          rawPhotos: sessionPhotoRecord?.photos || photos,
+          filter: selectedFilter.name,
+          frameId: frameSlug,
+        }),
+      });
+      const finalizeData = await res.json().catch(() => ({}));
+      if (!res.ok || !finalizeData.success) {
+        throw new Error(finalizeData.error || "Gagal menyimpan foto final");
+      }
+
+      if (finalizeData.token) {
+        sessionStorage.setItem(`invoiceToken_${sessionId}`, finalizeData.token);
+        sessionStorage.setItem(`invoiceNumber_${sessionId}`, finalizeData.invoiceNumber);
+      }
       try {
-        const res = await fetch("/api/invoices", {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({
-            sessionId,
-            imageData: finalDataUrl,
-            filter: selectedFilter.name,
-          }),
-        });
-        if (res.ok) {
-          const invData = await res.json();
-          if (invData.token) {
-            sessionStorage.setItem(`invoiceToken_${sessionId}`, invData.token);
-            sessionStorage.setItem(`invoiceNumber_${sessionId}`, invData.invoiceNumber);
-          }
-        }
-      } catch (uploadErr) {
-        console.warn("Could not sync to /api/invoices:", uploadErr);
+        await clearSessionPhotos(sessionId);
+      } catch (cleanupError) {
+        console.error("Failed to clear temporary session photos:", cleanupError);
       }
 
       setRenderProgress(100);
@@ -290,11 +291,12 @@ function FilterContent() {
       }, 500);
     } catch (err) {
       console.error("Rendering error:", err);
-      // Fallback proceed even if canvas export encounters a browser glitch
-      sessionStorage.setItem(`filter_${sessionId}`, selectedFilter.name);
-      setTimeout(() => {
-        router.push(`/session/${sessionId}/result?frame=${frameSlug}`);
-      }, 500);
+      setSaveError(
+        err instanceof Error
+          ? err.message
+          : "Gagal menyimpan foto final. Silakan coba lagi."
+      );
+      setIsRendering(false);
     }
   };
 
@@ -553,6 +555,11 @@ function FilterContent() {
           {isRendering ? "MEMPROSES..." : "CETAK & SELESAI (LANGKAH 6) ➔"}
         </Button>
       </div>
+      {saveError && (
+        <div className="mt-3 border-4 border-red-700 bg-red-100 p-3 text-center font-bold text-red-700">
+          {saveError}
+        </div>
+      )}
 
       {/* ============ STEPPER FOOTER ============ */}
       <footer className="mt-4 flex justify-center">

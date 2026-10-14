@@ -6,6 +6,10 @@
     "dev": "npm --prefix app run dev",
     "build": "npm --prefix app run build",
     "start": "npm --prefix app run start",
-    "lint": "npm --prefix app run lint"
+    "lint": "npm --prefix app run lint",
+    "tunnel": "npx cloudflared tunnel --url http://localhost:3000"
+  },
+  "dependencies": {
+    "jszip": "^3.10.2"
   }
 }

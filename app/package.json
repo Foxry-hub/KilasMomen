@@ -6,10 +6,16 @@
     "dev": "next dev",
     "build": "next build",
     "start": "next start",
-    "lint": "eslint"
+    "lint": "eslint",
+    "db:generate": "prisma generate",
+    "db:migrate": "prisma migrate dev --name init",
+    "tunnel": "npx cloudflared tunnel --url http://localhost:3000"
   },
   "dependencies": {
+    "@prisma/client": "^6.19.0",
+    "@types/jszip": "^3.4.0",
     "@types/qrcode": "^1.5.6",
+    "jszip": "^3.10.2",
     "next": "16.4.0",
     "qrcode": "^1.5.4",
     "react": "19.3.0",
@@ -22,6 +28,7 @@
     "@types/react-dom": "^19",
     "eslint": "^9",
     "eslint-config-next": "16.4.0",
+    "prisma": "^6.19.0",
     "tailwindcss": "^4",
     "typescript": "^5"
   }

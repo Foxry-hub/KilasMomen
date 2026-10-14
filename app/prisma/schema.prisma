@@ -1,0 +1,75 @@
+datasource db {
+  provider = "sqlite"
+  url      = "file:./dev.db"
+}
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+enum TransactionStatus {
+  PENDING
+  PAID
+  CANCELLED
+  EXPIRED
+  COMPLETED
+}
+
+model Transaction {
+  id            String            @id
+  code          String            @unique
+  amount        Int
+  paymentMethod String?
+  status        TransactionStatus @default(PENDING)
+  createdAt     DateTime          @default(now())
+  expiresAt     DateTime
+  confirmedAt   DateTime?
+  photoSession  PhotoSession?
+}
+
+model Frame {
+  id          String         @id
+  name        String
+  slug        String         @unique
+  slotCount   Int
+  slotsConfig Json
+  overlayPath String
+  isActive    Boolean        @default(true)
+  sessions    PhotoSession[]
+}
+
+model PhotoSession {
+  id             String       @id
+  transactionId  String?      @unique
+  frameId        String?
+  status         String       @default("ACTIVE")
+  filter         String       @default("ORIGINAL")
+  finalImagePath String?
+  transaction    Transaction? @relation(fields: [transactionId], references: [id])
+  frame          Frame?       @relation(fields: [frameId], references: [id])
+  photos         Photo[]
+  invoice        Invoice?
+}
+
+model Photo {
+  id            String       @id
+  sessionId     String
+  shotIndex     Int
+  filePath      String
+  selectedOrder Int?
+  session       PhotoSession @relation(fields: [sessionId], references: [id], onDelete: Cascade)
+
+  @@unique([sessionId, shotIndex])
+}
+
+model Invoice {
+  id            String       @id
+  invoiceNumber String       @unique
+  sessionId     String       @unique
+  token         String       @unique
+  filePath      String
+  filter        String       @default("ORIGINAL")
+  expiresAt     DateTime
+  createdAt     DateTime     @default(now())
+  session       PhotoSession @relation(fields: [sessionId], references: [id], onDelete: Cascade)
+}

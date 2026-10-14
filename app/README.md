@@ -16,6 +16,34 @@ bun dev
 
 Open [http://localhost:3000](http://localhost:3000) with your browser to see the result.
 
+## Local SQLite and Cloudflare Tunnel
+
+Metadata is stored in SQLite through Prisma. Photo files remain on the local
+disk under `storage/sessions/<sessionId>/`; they are not stored in SQLite or
+browser storage.
+
+Initialize the database:
+
+```bash
+npm run db:migrate
+```
+
+For a public HTTPS QR link during an event:
+
+```bash
+npm run dev
+npm run tunnel
+```
+
+Copy the generated `https://<name>.trycloudflare.com` URL into `app/.env.local`:
+
+```env
+NEXT_PUBLIC_BASE_URL=https://<name>.trycloudflare.com
+```
+
+Restart Next.js after changing the environment file. If the variable is empty,
+QR links automatically use the origin currently opening the kiosk.
+
 You can start editing the page by modifying `app/page.tsx`. The page auto-updates as you edit the file.
 
 This project uses [`next/font`](https://nextjs.org/docs/app/building-your-application/optimizing/fonts) to automatically optimize and load [Geist](https://vercel.com/font), a new font family for Vercel.

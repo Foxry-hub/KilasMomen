@@ -4,6 +4,7 @@ import { useState, useEffect, Suspense } from "react";
 import { useRouter, useParams, useSearchParams } from "next/navigation";
 import { Button } from "@/components/ui/Button";
 import { Stepper } from "@/components/ui/Stepper";
+import { getSessionPhotos, saveSessionPhotos } from "@/lib/session-photo-storage";
 
 function PhotoSelectionContent() {
   const router = useRouter();
@@ -17,14 +18,16 @@ function PhotoSelectionContent() {
   const [selectedIndices, setSelectedIndices] = useState<number[]>([]);
 
   useEffect(() => {
-    try {
-      const stored = sessionStorage.getItem(`photos_${sessionId}`);
-      if (stored) {
-        setPhotos(JSON.parse(stored));
+    void (async () => {
+      try {
+        const stored = await getSessionPhotos(sessionId);
+        if (stored?.photos) {
+          setPhotos(stored.photos);
+        }
+      } catch (error) {
+        console.error("Failed to load captured photos:", error);
       }
-    } catch {
-      // Fallback
-    }
+    })();
   }, [sessionId]);
 
   const toggleSelect = (index: number) => {
@@ -120,12 +123,13 @@ function PhotoSelectionContent() {
           size="lg"
           className="px-12 text-2xl"
           disabled={selectedIndices.length !== 2}
-          onClick={() => {
-            // Save selected photos
-            const chosen = selectedIndices.map((i) => photos[i]);
-            sessionStorage.setItem(`chosen_${sessionId}`, JSON.stringify(chosen));
-            // Navigate to step 5: filter
-            router.push(`/session/${sessionId}/filter?frame=${frameSlug}`);
+          onClick={async () => {
+            try {
+              await saveSessionPhotos(sessionId, photos, selectedIndices);
+              router.push(`/session/${sessionId}/filter?frame=${frameSlug}`);
+            } catch (error) {
+              console.error("Failed to save selected photos:", error);
+            }
           }}
         >
           LANJUT KE PILIH FILTER (LANGKAH 5) ➔

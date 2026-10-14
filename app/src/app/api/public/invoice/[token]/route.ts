@@ -1,4 +1,5 @@
 import { NextResponse } from "next/server";
+import { prisma } from "@/lib/prisma";
 import { findInvoice } from "@/lib/store";
 
 export async function GET(
@@ -14,9 +15,27 @@ export async function GET(
     "Access-Control-Allow-Headers": "Content-Type",
   };
 
-  const invoice = findInvoice(token);
+  const invoice = await prisma.invoice.findUnique({
+    where: { token },
+  });
 
   if (!invoice) {
+    const legacyInvoice = findInvoice(token);
+    if (legacyInvoice) {
+      return NextResponse.json(
+        {
+          invoiceNumber: legacyInvoice.invoiceNumber,
+          token: legacyInvoice.token,
+          sessionId: legacyInvoice.sessionId,
+          filter: legacyInvoice.filter,
+          createdAt: legacyInvoice.createdAt,
+          expiresAt: legacyInvoice.expiresAt,
+          imageUrl: `/api/public/invoice/${legacyInvoice.token}/image`,
+          downloadUrl: `/api/public/invoice/${legacyInvoice.token}/image?download=1`,
+        },
+        { headers: corsHeaders }
+      );
+    }
     return NextResponse.json(
       { error: "Tautan salah, kedaluwarsa, atau sudah dicabut" },
       { status: 404, headers: corsHeaders }

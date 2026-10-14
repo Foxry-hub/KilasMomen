@@ -1,12 +1,12 @@
 import { NextResponse } from "next/server";
-import { transactions } from "@/lib/store";
+import { prisma } from "@/lib/prisma";
 
 export async function PATCH(
   request: Request,
   { params }: { params: Promise<{ id: string }> }
 ) {
   const { id } = await params;
-  const trx = transactions.get(id);
+  const trx = await prisma.transaction.findUnique({ where: { id } });
 
   if (!trx) {
     return NextResponse.json({ error: "Transaksi tidak ditemukan" }, { status: 404 });
@@ -14,7 +14,10 @@ export async function PATCH(
 
   // Check expired
   if (new Date(trx.expiresAt) < new Date()) {
-    trx.status = "EXPIRED";
+    await prisma.transaction.update({
+      where: { id },
+      data: { status: "EXPIRED" },
+    });
     return NextResponse.json(
       { error: "Transaksi sudah kedaluwarsa" },
       { status: 409 }
@@ -41,10 +44,6 @@ export async function PATCH(
   }
 
   // Update to PAID
-  trx.status = "PAID";
-  trx.paymentMethod = paymentMethod;
-  trx.confirmedAt = new Date().toISOString();
-
   // Generate a mock session ID
   const sessionId =
     "ses_" +
@@ -52,8 +51,29 @@ export async function PATCH(
     "_" +
     Math.random().toString(36).substring(2, 8);
 
+  const updated = await prisma.$transaction(async (tx) => {
+    const confirmed = await tx.transaction.update({
+      where: { id },
+      data: {
+        status: "PAID",
+        paymentMethod,
+        confirmedAt: new Date(),
+      },
+    });
+
+    await tx.photoSession.create({
+      data: {
+        id: sessionId,
+        transactionId: confirmed.id,
+        status: "ACTIVE",
+      },
+    });
+
+    return confirmed;
+  });
+
   return NextResponse.json({
-    ...trx,
+    ...updated,
     sessionId,
   });
 }
