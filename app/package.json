@@ -1,15 +1,16 @@
 {
-  "name": "app",
-  "version": "0.1.0",
+  "name": "happy-click",
+  "version": "2.0.0",
   "private": true,
   "scripts": {
-    "dev": "next dev",
+    "dev": "next dev -H 0.0.0.0 -p 3000",
     "build": "next build",
-    "start": "next start",
+    "start": "next start -H 0.0.0.0 -p 3000",
     "lint": "eslint",
     "db:generate": "prisma generate",
-    "db:migrate": "prisma migrate dev --name init",
-    "tunnel": "npx cloudflared tunnel --url http://localhost:3000"
+    "db:push": "prisma db push",
+    "tunnel": "cloudflared tunnel --url http://localhost:3000",
+    "tunnel:quick": "cloudflared tunnel --url http://localhost:3000 --logfile logs/cloudflared.log"
   },
   "dependencies": {
     "@prisma/client": "^6.19.0",
@@ -19,7 +20,9 @@
     "next": "16.4.0",
     "qrcode": "^1.5.4",
     "react": "19.3.0",
-    "react-dom": "19.3.0"
+    "react-dom": "19.3.0",
+    "sharp": "^0.35.5",
+    "zod": "^4.6.7"
   },
   "devDependencies": {
     "@tailwindcss/turbopack": "^4",

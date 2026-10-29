@@ -1,7 +1,7 @@
 import { ButtonHTMLAttributes } from "react";
 
 type Variant = "primary" | "secondary" | "success" | "danger" | "ghost";
-type Size = "md" | "lg" | "xl";
+type Size = "xs" | "sm" | "md" | "lg" | "xl";
 
 const variantStyles: Record<Variant, string> = {
   primary: "bg-brand-yellow",
@@ -12,9 +12,11 @@ const variantStyles: Record<Variant, string> = {
 };
 
 const sizeStyles: Record<Size, string> = {
-  md: "h-16 px-6 text-xl shadow-brut",
-  lg: "h-24 px-8 text-2xl shadow-brut-lg",
-  xl: "h-28 px-10 text-3xl shadow-brut-xl w-full",
+  xs: "h-9 px-3 text-xs border-2 shadow-brut-sm",
+  sm: "h-11 px-4 text-sm border-2 shadow-brut-sm",
+  md: "h-16 px-6 text-xl border-4 shadow-brut",
+  lg: "h-24 px-8 text-2xl border-4 shadow-brut-lg",
+  xl: "h-28 px-10 text-3xl border-4 shadow-brut-xl w-full",
 };
 
 interface ButtonProps extends ButtonHTMLAttributes<HTMLButtonElement> {
@@ -35,7 +37,7 @@ export function Button({
       className={[
         // Base
         "inline-flex items-center justify-center gap-3",
-        "border-4 border-ink font-display uppercase leading-none tracking-tight",
+        "border-ink font-display uppercase leading-none tracking-tight",
         "select-none cursor-pointer",
         // Press effect
         "active:translate-x-1 active:translate-y-1 active:shadow-none",

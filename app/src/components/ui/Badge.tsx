@@ -6,10 +6,9 @@ interface BadgeProps {
 const statusColors: Record<string, string> = {
   PENDING: "bg-brand-yellow",
   PAID: "bg-brand-cyan",
+  PROCESSING: "bg-brand-violet",
   COMPLETED: "bg-brand-green",
   CANCELLED: "bg-brand-red",
-  EXPIRED: "bg-brand-pink",
-  VOIDED: "bg-brand-violet",
 };
 
 export function Badge({ status, className = "" }: BadgeProps) {

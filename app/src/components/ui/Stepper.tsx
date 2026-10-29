@@ -3,7 +3,7 @@ interface StepperProps {
   totalSteps?: number;
 }
 
-const STEP_LABELS = ["BAYAR", "FRAME", "FOTO", "PILIH", "FILTER", "CETAK"];
+const STEP_LABELS = ["BAYAR", "FRAME", "FOTO", "TINJAU", "ATUR", "CETAK"];
 
 export function Stepper({ currentStep, totalSteps = 6 }: StepperProps) {
   return (

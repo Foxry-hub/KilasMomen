@@ -2,9 +2,9 @@ import type { Metadata } from "next";
 import "./globals.css";
 
 export const metadata: Metadata = {
-  title: "Photobooth Kios — Localhost",
+  title: "Happy Click",
   description:
-    "Photobooth kios offline-first dengan UI Neo-Brutalism. Bayar, jepret, cetak!",
+    "Photobooth offline-first dengan UI Neo-Brutalism. Bayar, jepret, cetak!",
 };
 
 export default function RootLayout({ children }: { children: React.ReactNode }) {

@@ -7,69 +7,88 @@ generator client {
   provider = "prisma-client-js"
 }
 
-enum TransactionStatus {
-  PENDING
-  PAID
-  CANCELLED
-  EXPIRED
-  COMPLETED
-}
-
 model Transaction {
-  id            String            @id
-  code          String            @unique
-  amount        Int
-  paymentMethod String?
-  status        TransactionStatus @default(PENDING)
-  createdAt     DateTime          @default(now())
-  expiresAt     DateTime
-  confirmedAt   DateTime?
-  photoSession  PhotoSession?
-}
+  id                 String        @id @default(cuid())
+  code               String        @unique
+  packageStripsCount Int           @default(1)
+  paymentMethod      String? // "QRIS" | "CASH"
+  totalAmount        Int           @default(0)
+  status             String        @default("PENDING") // PENDING | PAID | PROCESSING | COMPLETED | CANCELLED
+  createdAt          DateTime      @default(now())
+  updatedAt          DateTime      @updatedAt
+  expiresAt          DateTime
+  session            PhotoSession?
 
-model Frame {
-  id          String         @id
-  name        String
-  slug        String         @unique
-  slotCount   Int
-  slotsConfig Json
-  overlayPath String
-  isActive    Boolean        @default(true)
-  sessions    PhotoSession[]
+  publicToken  String    @unique // token acak (randomBytes 24, base64url) untuk URL soft copy
+  cancelReason String? // TIMEOUT | OPERATOR | KIOSK_IDLE | OPERATOR_AFTER_PAYMENT
+  paidAt       DateTime? // pembeda transaksi berbayar: dasar pemasukan, termasuk yang hangus
+  processingAt DateTime?
+  completedAt  DateTime?
+  cancelledAt  DateTime?
+
+  @@index([status, createdAt])
+  @@index([status, expiresAt])
 }
 
 model PhotoSession {
-  id             String       @id
-  transactionId  String?      @unique
-  frameId        String?
-  status         String       @default("ACTIVE")
-  filter         String       @default("ORIGINAL")
-  finalImagePath String?
-  transaction    Transaction? @relation(fields: [transactionId], references: [id])
-  frame          Frame?       @relation(fields: [frameId], references: [id])
-  photos         Photo[]
-  invoice        Invoice?
+  id              String      @id @default(cuid())
+  transactionId   String      @unique
+  transaction     Transaction @relation(fields: [transactionId], references: [id], onDelete: Cascade)
+  frameId         String?
+  filterChosen    String?     @default("ORIGINAL")
+  retakeCountUsed Int         @default(0)
+  finalImagePath  String?
+  photos          Photo[]
+
+  frame           Frame?      @relation(fields: [frameId], references: [id])
+  slotAssignments String? // JSON: [{ "slotIndex": 0, "shotIndex": 3 }, ...]
+  finalizedAt     DateTime?
+  outputs         OutputLog[]
 }
 
 model Photo {
-  id            String       @id
-  sessionId     String
-  shotIndex     Int
-  filePath      String
-  selectedOrder Int?
-  session       PhotoSession @relation(fields: [sessionId], references: [id], onDelete: Cascade)
+  id        String       @id @default(cuid())
+  sessionId String
+  session   PhotoSession @relation(fields: [sessionId], references: [id], onDelete: Cascade)
+  shotIndex Int
+  filePath  String
+
+  capturedAt DateTime @default(now())
 
   @@unique([sessionId, shotIndex])
 }
 
-model Invoice {
-  id            String       @id
-  invoiceNumber String       @unique
-  sessionId     String       @unique
-  token         String       @unique
-  filePath      String
-  filter        String       @default("ORIGINAL")
-  expiresAt     DateTime
-  createdAt     DateTime     @default(now())
-  session       PhotoSession @relation(fields: [sessionId], references: [id], onDelete: Cascade)
+model Frame {
+  id            String  @id @default(cuid())
+  name          String
+  category      String // "TWO" | "THREE" | "MANY"
+  isRecommended Boolean @default(false)
+  slotCount     Int
+  slotsConfig   String // JSON v2: { version, slots:[{x,y,w,h}], print:{dpi,paper,widthIn,heightIn,fit} }
+  overlayPath   String
+  isActive      Boolean @default(true)
+
+  canvasWidth   Int // dimensi ASLI PNG (sharp.metadata), TANPA default
+  canvasHeight  Int // dimensi ASLI PNG, TANPA default
+  thumbnailPath String?
+  sortOrder     Int      @default(0)
+  createdAt     DateTime @default(now())
+  sessions      PhotoSession[]
+}
+
+model Setting {
+  key   String @id
+  value String
+}
+
+model OutputLog {
+  id        String       @id @default(cuid())
+  sessionId String
+  session   PhotoSession @relation(fields: [sessionId], references: [id], onDelete: Cascade)
+  type      String // "PRINT" | "QR" | "FOTOCOPY"
+  copies    Int          @default(1)
+  note      String?
+  createdAt DateTime     @default(now())
+
+  @@index([sessionId, createdAt])
 }

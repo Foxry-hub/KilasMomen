@@ -1,7 +1,5 @@
 import InvoiceClient from "./InvoiceClient";
 
-export const instant = false;
-
 export default async function PublicInvoicePage({
   params,
 }: {

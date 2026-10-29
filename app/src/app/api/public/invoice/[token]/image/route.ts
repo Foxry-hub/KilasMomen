@@ -1,100 +1,49 @@
-import { NextResponse } from "next/server";
 import fs from "fs/promises";
-import path from "path";
-import { prisma } from "@/lib/prisma";
-import { findInvoice, getImageBuffer } from "@/lib/store";
+import { NextResponse } from "next/server";
+import { findPublicTransaction, sessionFinalAbsolutePath } from "@/lib/session-output";
 
+const CORS_HEADERS = {
+  "Access-Control-Allow-Origin": "*",
+  "Access-Control-Allow-Methods": "GET, OPTIONS",
+  "Access-Control-Allow-Headers": "Content-Type",
+};
+
+/**
+ * GET /api/public/invoice/[token]/image — `final.jpg` (§6.4, §6.6).
+ * `?download=1` memaksa unduhan. Kegagalan apa pun → 404 seragam.
+ */
 export async function GET(
   request: Request,
-  { params }: { params: Promise<{ token: string }> }
+  ctx: { params: Promise<{ token: string }> }
 ) {
-  const { token } = await params;
-
-  // Add CORS headers for cross-origin mobile access
-  const corsHeaders = {
-    "Access-Control-Allow-Origin": "*",
-    "Access-Control-Allow-Methods": "GET, OPTIONS",
-    "Access-Control-Allow-Headers": "Content-Type",
-  };
-
-  const invoice = await prisma.invoice.findUnique({
-    where: { token },
-  });
-
-  if (!invoice) {
-    // Keep invoices created before the Prisma migration readable.
-    const legacyInvoice = findInvoice(token);
-    if (legacyInvoice) {
-      const legacyBuffer = getImageBuffer(legacyInvoice);
-      if (legacyBuffer) {
-        const { searchParams } = new URL(request.url);
-        const isDownload = searchParams.get("download") === "1";
-        const filename = `PHOTOBOOTH_${legacyInvoice.invoiceNumber || token}.jpg`;
-        const headers = new Headers(corsHeaders);
-        headers.set("Content-Type", "image/jpeg");
-        headers.set("Content-Length", legacyBuffer.length.toString());
-        headers.set(
-          "Content-Disposition",
-          `${isDownload ? "attachment" : "inline"}; filename="${filename}"`
-        );
-        return new NextResponse(new Uint8Array(legacyBuffer), { status: 200, headers });
-      }
-    }
-    return new NextResponse("Foto tidak ditemukan", {
-      status: 404,
-      headers: corsHeaders,
-    });
-  }
-
-  const storageRoot = path.resolve(process.cwd(), "storage", "sessions");
-  const imagePath = path.resolve(process.cwd(), invoice.filePath);
-  if (!imagePath.startsWith(`${storageRoot}${path.sep}`)) {
-    return new NextResponse("Path file gambar tidak valid", {
-      status: 404,
-      headers: corsHeaders,
-    });
+  const { token } = await ctx.params;
+  const transaction = await findPublicTransaction(token);
+  if (!transaction?.session) {
+    return new NextResponse("Foto tidak ditemukan", { status: 404, headers: CORS_HEADERS });
   }
 
   let buffer: Buffer;
   try {
-    buffer = await fs.readFile(imagePath);
-  } catch (error) {
-    console.error("Failed to read invoice image:", error);
-    return new NextResponse("File gambar tidak ditemukan di sistem penyimpanan", {
-      status: 404,
-      headers: corsHeaders,
-    });
+    buffer = await fs.readFile(sessionFinalAbsolutePath(transaction.session.id));
+  } catch {
+    return new NextResponse("Foto tidak ditemukan", { status: 404, headers: CORS_HEADERS });
   }
 
-  const { searchParams } = new URL(request.url);
-  const isDownload = searchParams.get("download") === "1";
-  const filename = `PHOTOBOOTH_${invoice.invoiceNumber || token}.jpg`;
+  const isDownload = new URL(request.url).searchParams.get("download") === "1";
+  const filename = `HappyClick_${transaction.code}.jpg`;
 
-  const headers = new Headers(corsHeaders);
+  const headers = new Headers(CORS_HEADERS);
   headers.set("Content-Type", "image/jpeg");
   headers.set("Content-Length", buffer.length.toString());
-  headers.set("Cache-Control", "public, max-age=604800, immutable");
+  headers.set("Cache-Control", "no-store");
+  headers.set(
+    "Content-Disposition",
+    `${isDownload ? "attachment" : "inline"}; filename="${filename}"`
+  );
 
-  if (isDownload) {
-    headers.set("Content-Disposition", `attachment; filename="${filename}"`);
-  } else {
-    headers.set("Content-Disposition", `inline; filename="${filename}"`);
-  }
-
-  return new NextResponse(new Uint8Array(buffer), {
-    status: 200,
-    headers,
-  });
+  return new NextResponse(new Uint8Array(buffer), { status: 200, headers });
 }
 
-// Handle preflight OPTIONS for CORS
 export async function OPTIONS() {
-  return new NextResponse(null, {
-    status: 204,
-    headers: {
-      "Access-Control-Allow-Origin": "*",
-      "Access-Control-Allow-Methods": "GET, OPTIONS",
-      "Access-Control-Allow-Headers": "Content-Type",
-    },
-  });
+  return new NextResponse(null, { status: 204, headers: CORS_HEADERS });
 }

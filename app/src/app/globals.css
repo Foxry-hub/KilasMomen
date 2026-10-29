@@ -113,6 +113,36 @@ img {
     paint-order: stroke fill;
     text-shadow: 8px 8px 0 #000;
   }
+
+  /* Scrollbar Neo-Brutalisme untuk panel operator (design-requirements §4.2) */
+  .scrollbar-brut {
+    scrollbar-width: thin;
+    scrollbar-color: #000 #fff;
+  }
+  .scrollbar-brut::-webkit-scrollbar {
+    width: 12px;
+    height: 12px;
+  }
+  .scrollbar-brut::-webkit-scrollbar-track {
+    background: #fff;
+    border-left: 2px solid #000;
+  }
+  .scrollbar-brut::-webkit-scrollbar-thumb {
+    background: #000;
+    border: 2px solid #fff;
+  }
+  .scrollbar-brut::-webkit-scrollbar-thumb:hover {
+    background: var(--color-brand-violet);
+  }
+
+  /* Sembunyikan scrollbar khusus area Kiosk (tetap bisa scroll) */
+  .scrollbar-hidden::-webkit-scrollbar {
+    display: none;
+  }
+  .scrollbar-hidden {
+    scrollbar-width: none;
+    -ms-overflow-style: none;
+  }
 }
 
 /* Reduce motion for accessibility */

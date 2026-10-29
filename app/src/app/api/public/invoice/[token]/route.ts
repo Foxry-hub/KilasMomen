@@ -1,78 +1,44 @@
 import { NextResponse } from "next/server";
-import { prisma } from "@/lib/prisma";
-import { findInvoice } from "@/lib/store";
+import { copy } from "@/lib/copy.id";
+import { findPublicTransaction } from "@/lib/session-output";
 
+const CORS_HEADERS = {
+  "Access-Control-Allow-Origin": "*",
+  "Access-Control-Allow-Methods": "GET, OPTIONS",
+  "Access-Control-Allow-Headers": "Content-Type",
+};
+
+/**
+ * GET /api/public/invoice/[token] — metadata soft copy (§6.4, §6.6).
+ * Valid hanya selama jendela event; kegagalan apa pun → 404 seragam.
+ */
 export async function GET(
   _request: Request,
-  { params }: { params: Promise<{ token: string }> }
+  ctx: { params: Promise<{ token: string }> }
 ) {
-  const { token } = await params;
+  const { token } = await ctx.params;
+  const transaction = await findPublicTransaction(token);
 
-  // CORS headers for cross-origin mobile access
-  const corsHeaders = {
-    "Access-Control-Allow-Origin": "*",
-    "Access-Control-Allow-Methods": "GET, OPTIONS",
-    "Access-Control-Allow-Headers": "Content-Type",
-  };
-
-  const invoice = await prisma.invoice.findUnique({
-    where: { token },
-  });
-
-  if (!invoice) {
-    const legacyInvoice = findInvoice(token);
-    if (legacyInvoice) {
-      return NextResponse.json(
-        {
-          invoiceNumber: legacyInvoice.invoiceNumber,
-          token: legacyInvoice.token,
-          sessionId: legacyInvoice.sessionId,
-          filter: legacyInvoice.filter,
-          createdAt: legacyInvoice.createdAt,
-          expiresAt: legacyInvoice.expiresAt,
-          imageUrl: `/api/public/invoice/${legacyInvoice.token}/image`,
-          downloadUrl: `/api/public/invoice/${legacyInvoice.token}/image?download=1`,
-        },
-        { headers: corsHeaders }
-      );
-    }
+  if (!transaction) {
     return NextResponse.json(
-      { error: "Tautan salah, kedaluwarsa, atau sudah dicabut" },
-      { status: 404, headers: corsHeaders }
-    );
-  }
-
-  // Check expiry
-  if (new Date(invoice.expiresAt) < new Date()) {
-    return NextResponse.json(
-      { error: "Masa berlaku tautan invoice telah berakhir" },
-      { status: 410, headers: corsHeaders }
+      { error: copy.invoice.expired },
+      { status: 404, headers: CORS_HEADERS }
     );
   }
 
   return NextResponse.json(
     {
-      invoiceNumber: invoice.invoiceNumber,
-      token: invoice.token,
-      sessionId: invoice.sessionId,
-      filter: invoice.filter,
-      createdAt: invoice.createdAt,
-      expiresAt: invoice.expiresAt,
-      imageUrl: `/api/public/invoice/${invoice.token}/image`,
-      downloadUrl: `/api/public/invoice/${invoice.token}/image?download=1`,
+      code: transaction.code,
+      filter: transaction.session?.filterChosen ?? "ORIGINAL",
+      createdAt: transaction.createdAt,
+      downloadUrl: `/api/public/invoice/${token}/image?download=1`,
+      imageUrl: `/api/public/invoice/${token}/image`,
+      rawPhotosUrl: `/api/public/invoice/${token}/raw-photos`,
     },
-    { headers: corsHeaders }
+    { headers: CORS_HEADERS }
   );
 }
 
-// Handle preflight OPTIONS for CORS
 export async function OPTIONS() {
-  return new NextResponse(null, {
-    status: 204,
-    headers: {
-      "Access-Control-Allow-Origin": "*",
-      "Access-Control-Allow-Methods": "GET, OPTIONS",
-      "Access-Control-Allow-Headers": "Content-Type",
-    },
-  });
+  return new NextResponse(null, { status: 204, headers: CORS_HEADERS });
 }

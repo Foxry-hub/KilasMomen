@@ -1,131 +1,120 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import { copy } from "@/lib/copy.id";
 
 interface InvoiceData {
-  invoiceNumber: string;
+  code: string;
   filter: string;
 }
 
+/** Halaman unduh soft copy untuk pengunjung (mobile-first) (§6.4). */
 export default function InvoiceClient({ token }: { token: string }) {
   const [invoice, setInvoice] = useState<InvoiceData | null>(null);
-  const [error, setError] = useState("");
-  const [downloadError, setDownloadError] = useState("");
-  const [downloadStatus, setDownloadStatus] = useState("Belum ada percobaan download ZIP.");
+  const [expired, setExpired] = useState(false);
+  const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    if (!token) return;
-
-    fetch(`/api/public/invoice/${encodeURIComponent(token)}`)
-      .then(async (response) => {
-        if (!response.ok) {
-          throw new Error("Invoice tidak ditemukan.");
+    let alive = true;
+    void (async () => {
+      try {
+        const res = await fetch(`/api/public/invoice/${encodeURIComponent(token)}`, {
+          cache: "no-store",
+        });
+        if (!alive) return;
+        if (!res.ok) {
+          setExpired(true);
+          return;
         }
-        setInvoice(await response.json());
-      })
-      .catch((requestError: unknown) => {
-        console.error("Failed to load invoice metadata:", requestError);
-        setError("Invoice tidak ditemukan atau sudah kedaluwarsa.");
-      });
+        setInvoice((await res.json()) as InvoiceData);
+      } catch {
+        if (alive) setExpired(true);
+      } finally {
+        if (alive) setLoading(false);
+      }
+    })();
+    return () => {
+      alive = false;
+    };
   }, [token]);
 
-  const invoiceNumber = invoice?.invoiceNumber || "PHOTOBOOTH";
-  const framedDownloadUrl = `/api/public/invoice/${encodeURIComponent(token)}/image?download=1`;
-  const rawPhotosDownloadUrl = `/api/public/invoice/${encodeURIComponent(token)}/raw-photos`;
-
-  const logRawZipClick = () => {
-    setDownloadError("");
-    setDownloadStatus("Klik terdeteksi. Membuka endpoint ZIP...");
-    console.warn("[Raw ZIP] Native download link clicked", {
-      token,
-      url: rawPhotosDownloadUrl,
-      time: new Date().toISOString(),
-    });
-  };
+  const filterLabel =
+    invoice && invoice.filter in copy.filter
+      ? copy.filter[invoice.filter as keyof typeof copy.filter]
+      : invoice?.filter;
 
   return (
-    <div className="min-h-screen bg-paper px-4 py-6 font-sans text-ink sm:px-6">
-      <style jsx global>{`
-        body {
-          background-color: #fffbeb;
-          background-image: radial-gradient(#00000020 1.5px, transparent 1.5px);
-          background-size: 24px 24px;
-        }
-      `}</style>
-
-      <main className="mx-auto w-full max-w-lg overflow-hidden border-4 border-ink bg-white shadow-brut-xl">
-        <header className="flex items-center justify-between border-b-4 border-ink bg-brand-yellow p-4">
+    <main className="mx-auto flex min-h-[100svh] w-full max-w-lg flex-col bg-paper p-4 sm:p-6">
+      <div className="overflow-hidden border-4 border-ink bg-white shadow-brut-xl">
+        <header className="flex items-center justify-between gap-3 border-b-4 border-ink bg-brand-yellow p-4">
           <div className="flex items-center gap-3">
-            <div className="border-2 border-ink bg-ink px-2 py-1 font-display text-lg text-brand-yellow">
-              PB
-            </div>
+            <span className="border-2 border-ink bg-ink px-2 py-1 font-display text-lg text-brand-yellow">
+              {copy.brand.short}
+            </span>
             <div>
-              <h1 className="font-display text-xl uppercase leading-none">PHOTOBOOTH KIOS</h1>
-              <p className="font-mono text-[10px] uppercase">Hasil foto digital 4R</p>
+              <h1 className="font-display text-xl uppercase leading-none">
+                {copy.brand.name}
+              </h1>
+              <p className="font-mono text-[10px] uppercase">{copy.brand.tagline}</p>
             </div>
           </div>
-          <span className="border-2 border-ink bg-white px-2 py-1 font-mono text-[10px] font-bold shadow-brut-sm">
-            {invoiceNumber}
-          </span>
+          {invoice && (
+            <span className="border-2 border-ink bg-white px-2 py-1 font-mono text-[10px] font-bold shadow-brut-sm">
+              {invoice.code}
+            </span>
+          )}
         </header>
 
         <section className="p-5 sm:p-7">
-          {error ? (
-            <div className="mb-5 border-4 border-ink bg-brand-red p-4 text-center font-bold text-white">
-              {error}
+          {loading && !expired && !invoice ? (
+            <p className="py-10 text-center font-display uppercase text-ink/50">
+              {copy.common.loading}
+            </p>
+          ) : expired ? (
+            <div className="border-4 border-ink bg-brand-red p-5 text-center shadow-brut">
+              <p className="font-display text-xl uppercase text-white">
+                {copy.invoice.expired}
+              </p>
             </div>
           ) : (
             <>
               <div className="mb-6 border-4 border-ink bg-brand-green p-4 shadow-brut">
-                <h2 className="font-display text-2xl uppercase">Foto Kamu Siap Diunduh!</h2>
-                <p className="mt-2 font-medium">
-                  Silakan pilih opsi unduh di bawah ini.
-                </p>
+                <h2 className="font-display text-2xl uppercase leading-tight">
+                  {copy.invoice.ready}
+                </h2>
+                <p className="mt-2 font-sans text-sm">{copy.invoice.choose}</p>
               </div>
 
-              <div className="space-y-4">
+              <div className="flex flex-col gap-4">
                 <a
-                  href={framedDownloadUrl}
+                  href={`/api/public/invoice/${encodeURIComponent(token)}/image?download=1`}
                   download
-                  className="block border-4 border-ink bg-brand-green px-4 py-5 text-center font-display text-lg uppercase shadow-brut transition-transform hover:-translate-y-1 active:translate-x-1 active:translate-y-1 active:shadow-none"
+                  className="block border-4 border-ink bg-brand-cyan px-4 py-5 text-center font-display text-lg uppercase shadow-brut transition-transform duration-100 active:translate-x-1 active:translate-y-1 active:shadow-none"
                 >
-                  📸 UNDUH FOTO BERFRAME (4R)
-                  <span className="mt-1 block font-sans text-xs font-bold uppercase">
-                    File final.jpg
-                  </span>
+                  {copy.invoice.downloadFramed}
                 </a>
 
                 <a
-                  href={rawPhotosDownloadUrl}
-                  download={`Mentahan-Foto-${token}.zip`}
-                  onPointerDown={() => console.warn("[Raw ZIP] Pointer down detected")}
-                  onClick={logRawZipClick}
-                  className="block border-4 border-ink bg-brand-yellow px-4 py-5 text-center font-display text-lg uppercase shadow-brut transition-transform hover:-translate-y-1 active:translate-x-1 active:translate-y-1 active:shadow-none"
+                  href={`/api/public/invoice/${encodeURIComponent(token)}/raw-photos`}
+                  download
+                  className="block border-4 border-ink bg-brand-yellow px-4 py-5 text-center font-display text-lg uppercase shadow-brut transition-transform duration-100 active:translate-x-1 active:translate-y-1 active:shadow-none"
                 >
-                  📦 UNDUH 5 FOTO MENTAH (ZIP)
-                  <span className="mt-1 block font-sans text-xs font-bold uppercase">
-                    Foto sebelum dipasang frame
-                  </span>
+                  {copy.invoice.downloadRaw}
                 </a>
-              </div>
-              {downloadError && (
-                <div className="mt-4 border-4 border-ink bg-brand-red p-3 text-center text-sm font-bold text-white">
-                  {downloadError}
-                </div>
-              )}
-              <div className="mt-3 border-2 border-ink bg-paper p-2 font-mono text-[10px] text-ink/70">
-                <strong>STATUS ZIP:</strong> {downloadStatus}
-                <br />
-                <span>Detail teknis tersedia di Console browser (F12).</span>
               </div>
             </>
           )}
 
-          <div className="mt-6 border-t-4 border-ink pt-4 text-center font-mono text-[11px] uppercase text-ink/60">
-            {invoice ? `Efek: ${invoice.filter}` : "Memuat informasi invoice..."}
-          </div>
+          <p className="mt-6 border-t-4 border-ink pt-4 text-center font-sans text-xs text-ink/70">
+            {copy.invoice.reminder}
+          </p>
+          {filterLabel && (
+            <p className="mt-2 text-center font-mono text-[10px] uppercase text-ink/50">
+              {copy.kiosk.editor.filterTitle}: {filterLabel}
+            </p>
+          )}
         </section>
-      </main>
-    </div>
+      </div>
+    </main>
   );
 }
