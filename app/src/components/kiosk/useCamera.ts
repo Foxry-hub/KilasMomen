@@ -8,6 +8,8 @@ interface UseCameraOptions {
   source?: string | null;
   /** Label perangkat yang disarankan operator (§6.3). */
   deviceLabel?: string | null;
+  /** Id perangkat yang dipilih operator (§6.3). */
+  deviceId?: string | null;
   /** "FULL_HD" | "4K" — menentukan resolusi ideal. */
   maxResolution?: string;
   enabled?: boolean;
@@ -31,12 +33,13 @@ const FULL_HD = { width: { ideal: 1920 }, height: { ideal: 1080 } };
 const UHD = { width: { ideal: 3840 }, height: { ideal: 2160 } };
 
 export function useCamera(options: UseCameraOptions = {}): UseCameraResult {
-  const { source, deviceLabel, maxResolution = "FULL_HD", enabled = true } = options;
+  const { source, deviceLabel, deviceId, maxResolution = "FULL_HD", enabled = true } = options;
 
   const videoElRef = useRef<HTMLVideoElement | null>(null);
   const streamRef = useRef<MediaStream | null>(null);
   const userChoiceRef = useRef<string | null>(null);
   const lastDeviceLabelRef = useRef<string | null>(null);
+  const lastDeviceIdRef = useRef<string | null>(null);
   const lastSourceRef = useRef<string | null>(null);
 
   const [devices, setDevices] = useState<KioskDevice[]>([]);
@@ -99,16 +102,22 @@ export function useCamera(options: UseCameraOptions = {}): UseCameraResult {
         }
 
         // Bila ada perubahan setting dari operator, paksa pindah ke preferred device (§6.3).
-        const settingChanged = 
-          (deviceLabel !== lastDeviceLabelRef.current) || 
-          (source !== lastSourceRef.current);
-        
+        const preferredDeviceId = deviceId ?? null;
+        const settingChanged =
+          deviceLabel !== lastDeviceLabelRef.current ||
+          preferredDeviceId !== lastDeviceIdRef.current ||
+          source !== lastSourceRef.current;
+
         lastDeviceLabelRef.current = deviceLabel ?? null;
+        lastDeviceIdRef.current = preferredDeviceId;
         lastSourceRef.current = source ?? null;
 
         if (!settingChanged && current && videoDevs.some((d) => d.deviceId === current)) {
           return current;
         }
+
+        const byId = deviceId ? videoDevs.find((d) => d.deviceId === deviceId) : null;
+        if (byId) return byId.deviceId;
 
         // Prioritas pemilihan:
         // 1. Label spesifik yang dipilih operator.
@@ -132,7 +141,7 @@ export function useCamera(options: UseCameraOptions = {}): UseCameraResult {
     } catch {
       setError("Gagal mendeteksi perangkat kamera. Pastikan izin kamera aktif.");
     }
-  }, [deviceLabel, source]);
+  }, [deviceId, deviceLabel, source]);
 
   const startCamera = useCallback(
     async (deviceId?: string) => {
@@ -215,8 +224,11 @@ export function useCamera(options: UseCameraOptions = {}): UseCameraResult {
   }, [enabled, enumerate]);
 
   useEffect(() => {
-    if (!enabled) return;
-    if (selectedDeviceId) startCamera(selectedDeviceId);
+    if (!enabled || !selectedDeviceId) return;
+    const timer = window.setTimeout(() => {
+      void startCamera(selectedDeviceId);
+    }, 0);
+    return () => window.clearTimeout(timer);
   }, [selectedDeviceId, enabled, startCamera]);
 
   const capture = useCallback(async (): Promise<Blob | null> => {

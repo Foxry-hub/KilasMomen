@@ -21,6 +21,7 @@ export interface KioskPrintProfile {
 export interface KioskPhotoRef {
   shotIndex: number;
   url: string;
+  capturedAt: string;
 }
 
 export interface KioskFrameView {

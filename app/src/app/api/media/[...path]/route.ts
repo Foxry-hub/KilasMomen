@@ -11,5 +11,9 @@ export async function GET(
   if (!absolute) {
     return new NextResponse("Path tidak valid", { status: 400 });
   }
-  return serveStorageFile(absolute);
+  const fileName = segments[segments.length - 1] ?? "";
+  const isSessionPhoto = segments[0] === "sessions" && /^shot-\d+\.jpg$/i.test(fileName);
+  return serveStorageFile(absolute, {
+    cacheControl: isSessionPhoto ? "no-store, no-cache, must-revalidate" : undefined,
+  });
 }

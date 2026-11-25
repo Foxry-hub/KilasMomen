@@ -75,3 +75,9 @@ export async function kioskUpload<T>(url: string, form: FormData): Promise<Kiosk
     return { ok: false, status: 0, data: null, error: "Tidak dapat menghubungi server" };
   }
 }
+
+export function cacheBustedPhotoUrl(photo: { url: string; capturedAt: string }): string {
+  const separator = photo.url.includes("?") ? "&" : "?";
+  const version = Date.parse(photo.capturedAt);
+  return `${photo.url}${separator}v=${encodeURIComponent(String(version))}`;
+}

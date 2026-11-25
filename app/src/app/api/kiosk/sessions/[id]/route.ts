@@ -18,5 +18,7 @@ export async function GET(_request: Request, ctx: { params: Promise<{ id: string
   });
   if (!transaction) return notFound("Transaksi tidak ditemukan");
 
-  return NextResponse.json(buildKioskStatus(transaction));
+  return NextResponse.json(buildKioskStatus(transaction), {
+    headers: { "Cache-Control": "no-store, no-cache, must-revalidate" },
+  });
 }

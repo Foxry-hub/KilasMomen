@@ -11,6 +11,7 @@ export type KioskTransaction = Prisma.TransactionGetPayload<{
 export interface KioskPhotoRef {
   shotIndex: number;
   url: string;
+  capturedAt: string;
 }
 
 export interface KioskSessionView {
@@ -143,7 +144,11 @@ export function buildKioskStatus(t: KioskTransaction): KioskStatusView {
             photoCount: s.photos.length,
             photos: [...s.photos]
               .sort((a, b) => a.shotIndex - b.shotIndex)
-              .map((p) => ({ shotIndex: p.shotIndex, url: `/api/media/${p.filePath}` })),
+              .map((p) => ({
+                shotIndex: p.shotIndex,
+                url: `/api/media/${p.filePath}`,
+                capturedAt: p.capturedAt.toISOString(),
+              })),
             retakeCountUsed: s.retakeCountUsed,
             filterChosen: s.filterChosen ?? "ORIGINAL",
             slotAssignments: parseAssignments(s.slotAssignments),

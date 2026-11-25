@@ -11,7 +11,7 @@ import {
   loadImage,
   type DrawableImage,
 } from "@/features/canvas/composeFrame";
-import { kioskJson, kioskUpload } from "@/components/kiosk/api";
+import { cacheBustedPhotoUrl, kioskJson, kioskUpload } from "@/components/kiosk/api";
 import { useHeartbeat, useKioskSession } from "@/components/kiosk/hooks";
 import { ConnectingOverlay, SessionEndedOverlay } from "@/components/kiosk/ScreenOverlays";
 
@@ -52,7 +52,7 @@ export default function EditorPage() {
   const session = data?.session ?? null;
   const frame = session?.frame ?? null;
   const photos = session?.photos ?? [];
-  const photoSignature = photos.map((p) => p.url).join("|");
+  const photoSignature = photos.map((p) => `${p.url}|${p.capturedAt}`).join("|");
 
   /* Guard layar: arahkan ke layar yang benar sesuai data (§7.9). */
   useEffect(() => {
@@ -94,7 +94,7 @@ export default function EditorPage() {
       await Promise.all(
         photos.map(async (p) => {
           try {
-            next[p.shotIndex] = await loadImage(p.url);
+            next[p.shotIndex] = await loadImage(cacheBustedPhotoUrl(p));
           } catch {
             /* lewati foto yang gagal dimuat */
           }
@@ -131,7 +131,7 @@ export default function EditorPage() {
 
   const photoByShot = useMemo(() => {
     const map: Record<number, string> = {};
-    for (const p of photos) map[p.shotIndex] = p.url;
+    for (const p of photos) map[p.shotIndex] = cacheBustedPhotoUrl(p);
     return map;
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [photoSignature]);

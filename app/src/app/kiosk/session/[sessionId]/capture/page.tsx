@@ -1,7 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useRef, useState } from "react";
-import { useParams, useRouter } from "next/navigation";
+import { useParams, useRouter, useSearchParams } from "next/navigation";
 import { copy } from "@/lib/copy.id";
 import { SHOT_COUNT } from "@/lib/constants";
 import { kioskUpload } from "@/components/kiosk/api";
@@ -17,13 +17,22 @@ function sleep(ms: number): Promise<void> {
 export default function CapturePage() {
   const router = useRouter();
   const params = useParams<{ sessionId: string }>();
+  const searchParams = useSearchParams();
   const sessionId = params?.sessionId ?? "";
+  const retakeParam = searchParams.get("retake");
+  const retakeMode = retakeParam !== null;
+  const requestedShot = retakeParam === null ? NaN : Number(retakeParam);
+  const retakeShot =
+    Number.isInteger(requestedShot) && requestedShot >= 1 && requestedShot <= SHOT_COUNT
+      ? requestedShot
+      : null;
 
   const { config } = useConfig();
   const [ended, setEnded] = useState(false);
   const [shot, setShot] = useState(1);
   const [countdown, setCountdown] = useState<number | null>(null);
   const [flash, setFlash] = useState(false);
+  const [retakeError, setRetakeError] = useState<string | null>(null);
 
   const cancelledRef = useRef(false);
   const startedRef = useRef(false);
@@ -47,10 +56,20 @@ export default function CapturePage() {
     maxResolution: config?.camera.maxResolution,
     enabled: !ended,
   });
+  const {
+    active: cameraActive,
+    capture,
+    devices: cameraDevices,
+    error: cameraError,
+    restart: restartCamera,
+    selectDevice,
+    selectedDeviceId,
+    videoRef,
+  } = camera;
 
   useHeartbeat("CAPTURE", {
-    devices: camera.devices,
-    cameraStatus: camera.error ? "ERROR" : camera.active ? "ACTIVE" : "IDLE",
+    devices: cameraDevices,
+    cameraStatus: cameraError ? "ERROR" : cameraActive ? "ACTIVE" : "IDLE",
   });
 
   const countdownSec = config?.countdownSec ?? 3;
@@ -67,8 +86,14 @@ export default function CapturePage() {
       router.replace(donePath);
       return;
     }
+    if (retakeMode) {
+      if (!retakeShot || !s.photos.some((photo) => photo.shotIndex === retakeShot)) {
+        router.replace(reviewPath);
+      }
+      return;
+    }
     if (s.photoCount >= SHOT_COUNT) router.replace(editorPath);
-  }, [data, router, donePath, editorPath]);
+  }, [data, router, donePath, editorPath, retakeMode, retakeShot, reviewPath]);
 
   const upload = useCallback(
     (shotIndex: number, blob: Blob) => {
@@ -87,6 +112,50 @@ export default function CapturePage() {
     [sessionId]
   );
 
+  const runRetake = useCallback(
+    async (shotIndex: number) => {
+      setShot(shotIndex);
+      for (let seconds = countdownSec; seconds >= 1; seconds--) {
+        if (cancelledRef.current) return;
+        setCountdown(seconds);
+        playCountdownBeep(seconds === 1);
+        await sleep(1000);
+      }
+
+      if (cancelledRef.current) return;
+      setCountdown(0);
+      const blob = await capture();
+      setFlash(true);
+      playShutterSound();
+      setTimeout(() => setFlash(false), 200);
+      if (!blob) {
+        setCountdown(null);
+        setRetakeError("Foto tidak berhasil diambil. Silakan coba lagi.");
+        startedRef.current = false;
+        return;
+      }
+
+      const form = new FormData();
+      form.append("file", blob, `shot-${shotIndex}.jpg`);
+      const result = await kioskUpload(
+        `/api/kiosk/sessions/${sessionId}/photos/${shotIndex}/retake`,
+        form
+      );
+      setCountdown(null);
+      if (!result.ok) {
+        if (result.status === 409 && result.conflictStatus !== "PROCESSING") {
+          setEnded(true);
+          return;
+        }
+        setRetakeError(result.error ?? "Gagal menyimpan foto ulang.");
+        startedRef.current = false;
+        return;
+      }
+      router.replace(reviewPath);
+    },
+    [capture, countdownSec, reviewPath, router, sessionId]
+  );
+
   const runSession = useCallback(
     async (start: number) => {
       for (let i = start; i <= SHOT_COUNT; i++) {
@@ -101,7 +170,7 @@ export default function CapturePage() {
         }
 
         setCountdown(0);
-        const blob = await camera.capture();
+        const blob = await capture();
         setFlash(true);
         playShutterSound();
         setTimeout(() => setFlash(false), 200);
@@ -115,13 +184,26 @@ export default function CapturePage() {
       await Promise.allSettled(uploadsRef.current);
       if (!cancelledRef.current) router.replace(reviewPath);
     },
-    [countdownSec, camera, upload, router, reviewPath]
+    [countdownSec, capture, upload, router, reviewPath]
   );
 
   /* Mulai otomatis setelah kamera aktif & sesi termuat (§7.5). */
   useEffect(() => {
     if (startedRef.current || ended) return;
-    if (!data?.session || !camera.active) return;
+    if (!data?.session || !cameraActive) return;
+
+    if (retakeMode) {
+      if (!retakeShot || retakeError) return;
+      if (!data.session.photos.some((photo) => photo.shotIndex === retakeShot)) {
+        router.replace(reviewPath);
+        return;
+      }
+      startedRef.current = true;
+      const timer = window.setTimeout(() => {
+        void runRetake(retakeShot);
+      }, 0);
+      return () => window.clearTimeout(timer);
+    }
 
     const start = data.session.photoCount + 1;
     if (start > SHOT_COUNT) {
@@ -130,14 +212,19 @@ export default function CapturePage() {
     }
     startedRef.current = true;
     void runSession(start);
-  }, [data, camera.active, ended, runSession, router, editorPath]);
-
-  const frame = data?.session?.frame;
-  const ratio = frame?.slots?.[0]
-    ? frame.slots[0].w / frame.slots[0].h
-    : frame
-      ? frame.canvasWidth / frame.canvasHeight
-      : 4 / 3;
+  }, [
+    data,
+    cameraActive,
+    ended,
+    retakeMode,
+    retakeShot,
+    retakeError,
+    runRetake,
+    runSession,
+    router,
+    reviewPath,
+    editorPath,
+  ]);
 
   return (
     <div className="flex flex-1 flex-col overflow-hidden">
@@ -145,12 +232,17 @@ export default function CapturePage() {
 
       <header className="flex shrink-0 items-center justify-between border-b-4 border-ink bg-brand-cyan p-3 lg:p-4">
         <span className="font-display text-xl uppercase tracking-tight lg:text-2xl">
-          {copy.kiosk.capture.shot(shot, SHOT_COUNT)}
+          {retakeMode
+            ? `FOTO ULANG #${retakeShot ?? "?"}`
+            : copy.kiosk.capture.shot(shot, SHOT_COUNT)}
         </span>
         <div className="flex items-center gap-2">
           {Array.from({ length: SHOT_COUNT }, (_, i) => {
-            const filled = i + 1 <= (data?.session?.photoCount ?? 0) || i + 1 < shot;
-            const current = i + 1 === shot && countdown !== null;
+            const isRetakeShot = retakeMode && i + 1 === retakeShot;
+            const filled =
+              !isRetakeShot &&
+              (i + 1 <= (data?.session?.photoCount ?? 0) || i + 1 < shot);
+            const current = isRetakeShot || (i + 1 === shot && countdown !== null);
             return (
               <span
                 key={i}
@@ -166,30 +258,52 @@ export default function CapturePage() {
 
       <main className="relative flex min-h-0 flex-1 items-center justify-center overflow-hidden bg-ink">
         <video
-          ref={camera.videoRef}
+          ref={videoRef}
           autoPlay
           playsInline
           muted
           className="h-full w-full scale-x-[-1] object-cover"
         />
 
-        <div className="pointer-events-none absolute inset-4 flex items-center justify-center overflow-hidden">
-          <div
-            className="h-full w-auto border-4 border-dashed border-white/70"
-            style={{ aspectRatio: String(ratio) }}
-          />
-        </div>
-
-        {countdown !== null && countdown > 0 && (
-          <div className="pointer-events-none absolute inset-0 flex items-center justify-center bg-ink/40">
-            <div className="animate-pop border-8 border-ink bg-brand-yellow p-10 text-center shadow-brut-xl">
-              <p className="mb-2 font-display text-2xl uppercase">{copy.kiosk.capture.getReady}</p>
-              <p className="font-display text-8xl leading-none lg:text-9xl">{countdown}</p>
+        {retakeError && retakeMode && (
+          <div className="absolute inset-0 z-30 flex items-center justify-center bg-ink/70 p-6">
+            <div className="w-full max-w-lg border-4 border-ink bg-white p-6 text-center shadow-brut-xl">
+              <p className="mb-5 font-display text-xl uppercase text-brand-red">{retakeError}</p>
+              <div className="flex flex-wrap justify-center gap-3">
+                <button
+                  type="button"
+                  onClick={() => {
+                    setRetakeError(null);
+                    startedRef.current = false;
+                  }}
+                  className="border-4 border-ink bg-brand-yellow px-5 py-3 font-display uppercase shadow-brut"
+                >
+                  Coba Lagi
+                </button>
+                <button
+                  type="button"
+                  onClick={() => router.replace(reviewPath)}
+                  className="border-4 border-ink bg-white px-5 py-3 font-display uppercase shadow-brut"
+                >
+                  Kembali ke Review
+                </button>
+              </div>
             </div>
           </div>
         )}
 
-        {(camera.error || !camera.active) && (
+        {countdown !== null && countdown > 0 && (
+          <div className="pointer-events-none absolute right-4 top-4 z-20 lg:right-8 lg:top-8">
+            <div className="animate-pop border-4 border-ink bg-brand-yellow p-4 text-center shadow-brut-lg lg:p-5">
+              <p className="mb-1 font-display text-base uppercase lg:text-lg">
+                {copy.kiosk.capture.getReady}
+              </p>
+              <p className="font-display text-6xl leading-none lg:text-7xl">{countdown}</p>
+            </div>
+          </div>
+        )}
+
+        {(cameraError || !cameraActive) && (
           <div className="absolute inset-0 z-20 flex items-center justify-center bg-paper/95 p-6">
             <div className="w-full max-w-xl border-4 border-ink bg-white p-6 text-center shadow-brut-xl">
               <div className="mb-4 border-4 border-ink bg-brand-red p-3 shadow-brut">
@@ -197,24 +311,24 @@ export default function CapturePage() {
                   ⚠ Kamera belum terhubung
                 </p>
               </div>
-              <p className="mb-5 font-sans text-sm text-ink/80">{camera.error}</p>
+              <p className="mb-5 font-sans text-sm text-ink/80">{cameraError}</p>
               <div className="flex flex-wrap justify-center gap-3">
                 <button
                   type="button"
-                  onClick={camera.restart}
+                  onClick={restartCamera}
                   className="border-4 border-ink bg-brand-yellow px-6 py-3 font-display text-lg uppercase shadow-brut active:translate-x-1 active:translate-y-1 active:shadow-none"
                 >
                   Pindai Ulang Kamera
                 </button>
-                {camera.devices.length > 1 && (
+                {cameraDevices.length > 1 && (
                   <button
                     type="button"
                     onClick={() => {
-                      const idx = camera.devices.findIndex(
-                        (d) => d.deviceId === camera.selectedDeviceId
+                      const idx = cameraDevices.findIndex(
+                        (d) => d.deviceId === selectedDeviceId
                       );
-                      const next = camera.devices[(idx + 1) % camera.devices.length];
-                      camera.selectDevice(next.deviceId);
+                      const next = cameraDevices[(idx + 1) % cameraDevices.length];
+                      selectDevice(next.deviceId);
                     }}
                     className="border-4 border-ink bg-white px-6 py-3 font-display text-lg uppercase shadow-brut active:translate-x-1 active:translate-y-1 active:shadow-none"
                   >
@@ -226,12 +340,6 @@ export default function CapturePage() {
           </div>
         )}
       </main>
-
-      <footer className="shrink-0 border-t-4 border-ink bg-white p-3 text-center lg:p-4">
-        <p className="font-sans text-sm text-ink/70">
-          Posisikan wajah di dalam garis putus-putus. Foto diambil otomatis.
-        </p>
-      </footer>
 
       <ConnectingOverlay show={connection === "offline" && !ended} />
       {ended && <SessionEndedOverlay onDone={() => router.replace("/kiosk")} />}

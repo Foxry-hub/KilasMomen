@@ -29,7 +29,7 @@ export function resolveStoragePath(relativePath: string): string | null {
 
 export async function serveStorageFile(
   absolutePath: string,
-  options: { downloadName?: string } = {}
+  options: { downloadName?: string; cacheControl?: string } = {}
 ): Promise<NextResponse> {
   let buffer: Buffer;
   try {
@@ -42,7 +42,7 @@ export async function serveStorageFile(
   const headers = new Headers({
     "Content-Type": CONTENT_TYPES[ext] ?? "application/octet-stream",
     "Content-Length": buffer.length.toString(),
-    "Cache-Control": "public, max-age=3600",
+    "Cache-Control": options.cacheControl ?? "public, max-age=3600",
   });
   if (options.downloadName) {
     headers.set("Content-Disposition", `attachment; filename="${options.downloadName}"`);
