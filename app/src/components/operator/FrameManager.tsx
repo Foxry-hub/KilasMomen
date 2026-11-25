@@ -27,8 +27,53 @@ function FrameEditRow({
   const [category, setCategory] = useState(frame.category);
   const [isRecommended, setIsRecommended] = useState(frame.isRecommended);
   const [slots, setSlots] = useState<Slot[]>(frame.slots);
+  const [targetSlotCount, setTargetSlotCount] = useState(frame.slotCount >= 4 ? frame.slotCount : 4);
   const [busy, setBusy] = useState(false);
+  const [detecting, setDetecting] = useState(false);
   const [error, setError] = useState<string | null>(null);
+
+  const detectSlots = async () => {
+    setDetecting(true);
+    setError(null);
+    try {
+      const imageResponse = await fetch(frame.overlayUrl);
+      if (!imageResponse.ok) throw new Error("Gagal memuat gambar frame");
+      const image = await imageResponse.blob();
+      const form = new FormData();
+      form.append("file", new File([image], `${frame.id}.png`, { type: "image/png" }));
+      form.append("category", category);
+      if (category === "MANY") form.append("slotCount", String(targetSlotCount));
+
+      const response = await fetch("/api/operator/frames/analyze", {
+        method: "POST",
+        body: form,
+      });
+      const data = (await response.json().catch(() => ({}))) as {
+        slots?: Slot[];
+        error?: string;
+      };
+      if (!response.ok || !Array.isArray(data.slots)) {
+        throw new Error(data.error ?? "Gagal mendeteksi slot");
+      }
+      setSlots(data.slots);
+    } catch (reason) {
+      setError(reason instanceof Error ? reason.message : "Gagal mendeteksi slot");
+    } finally {
+      setDetecting(false);
+    }
+  };
+
+  const alignSlots = () => {
+    if (!slots.length) return;
+    const commonWidth = Math.max(
+      1,
+      Math.min(frame.canvasWidth, Math.round(slots.reduce((sum, slot) => sum + slot.w, 0) / slots.length))
+    );
+    const centerX =
+      slots.reduce((sum, slot) => sum + slot.x + slot.w / 2, 0) / slots.length;
+    const x = Math.max(0, Math.min(frame.canvasWidth - commonWidth, Math.round(centerX - commonWidth / 2)));
+    setSlots(slots.map((slot) => ({ ...slot, x, w: commonWidth })));
+  };
 
   const save = async () => {
     setBusy(true);
@@ -56,6 +101,35 @@ function FrameEditRow({
           editable
           onChange={setSlots}
         />
+        <div className="flex flex-wrap items-center gap-2">
+          {category === "MANY" && (
+            <label className="flex items-center gap-2 font-display uppercase">
+              Slot target
+              <select
+                className="border-2 border-ink bg-white px-2 py-1"
+                value={targetSlotCount}
+                onChange={(event) => setTargetSlotCount(Number(event.target.value))}
+              >
+                {[4, 5, 6].map((count) => (
+                  <option key={count} value={count}>
+                    {count}
+                  </option>
+                ))}
+              </select>
+            </label>
+          )}
+          <Button size="xs" variant="secondary" disabled={detecting || busy} onClick={detectSlots}>
+            DETEKSI ULANG SLOT
+          </Button>
+          <Button
+            size="xs"
+            variant="secondary"
+            disabled={busy || slots.length === 0}
+            onClick={alignSlots}
+          >
+            RATAKAN LEBAR & POSISI X
+          </Button>
+        </div>
         <div className="flex flex-col gap-2 text-xs">
           <label className="flex flex-col gap-1">
             <span className="font-display uppercase">Nama</span>
@@ -70,7 +144,12 @@ function FrameEditRow({
             <select
               className="border-2 border-ink bg-white px-2 py-1.5"
               value={category}
-              onChange={(e) => setCategory(e.target.value)}
+              onChange={(e) => {
+                setCategory(e.target.value);
+                if (e.target.value === "MANY" && frame.slotCount >= 4) {
+                  setTargetSlotCount(frame.slotCount);
+                }
+              }}
             >
               {CATEGORIES.map((c) => (
                 <option key={c.value} value={c.value}>
@@ -89,7 +168,7 @@ function FrameEditRow({
           </label>
           {error && <p className="text-brand-red">{error}</p>}
           <div className="flex gap-2">
-            <Button size="xs" variant="success" disabled={busy} onClick={save}>
+            <Button size="xs" variant="success" disabled={busy || detecting} onClick={save}>
               {copy.common.save}
             </Button>
             <Button size="xs" variant="secondary" disabled={busy} onClick={onCancel}>

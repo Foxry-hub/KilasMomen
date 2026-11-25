@@ -55,6 +55,7 @@ export function FrameUploadForm({
   const [slots, setSlots] = useState<Slot[]>([]);
   const [name, setName] = useState("");
   const [category, setCategory] = useState("TWO");
+  const [manySlotCount, setManySlotCount] = useState(4);
   const [isRecommended, setIsRecommended] = useState(false);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -69,25 +70,46 @@ export function FrameUploadForm({
     return () => URL.revokeObjectURL(url);
   }, [file]);
 
+  const analyzeFile = async (
+    target: File,
+    targetCategory: string,
+    targetSlotCount: number,
+    suggestCategoryFromResult: boolean
+  ) => {
+    const form = new FormData();
+    form.append("file", target);
+    form.append("category", targetCategory);
+    if (targetCategory === "MANY") form.append("slotCount", String(targetSlotCount));
+    setBusy(true);
+    setError(null);
+    try {
+      const res = await fetch("/api/operator/frames/analyze", { method: "POST", body: form });
+      const data = (await res.json().catch(() => ({}))) as Analysis & { error?: string };
+      if (!res.ok) throw new Error(data.error ?? "Gagal menganalisis berkas");
+      setAnalysis(data);
+      setSlots(data.slots ?? []);
+      if (suggestCategoryFromResult) {
+        const suggested = suggestCategory((data.slots ?? []).length);
+        setCategory(suggested);
+        if (suggested === "MANY" && (data.slots?.length ?? 0) >= 4) {
+          setManySlotCount(Math.min(6, data.slots!.length));
+        }
+      }
+      return true;
+    } catch (reason) {
+      setError(reason instanceof Error ? reason.message : "Gagal menganalisis berkas");
+      return false;
+    } finally {
+      setBusy(false);
+    }
+  };
+
   const pickFile = async (next: File) => {
     setError(null);
     setAnalysis(null);
     setFile(next);
-    const form = new FormData();
-    form.append("file", next);
-    setBusy(true);
-    const res = await fetch("/api/operator/frames/analyze", { method: "POST", body: form });
-    const data = (await res.json().catch(() => ({}))) as Analysis & { error?: string };
-    setBusy(false);
-    if (!res.ok) {
-      setError(data.error ?? "Gagal menganalisis berkas");
-      setFile(null);
-      return;
-    }
-    setAnalysis(data);
-    setSlots(data.slots ?? []);
-    setCategory(suggestCategory((data.slots ?? []).length));
-    if (!name) setName(next.name.replace(/\.png$/i, "").slice(0, 40));
+    const success = await analyzeFile(next, category, manySlotCount, true);
+    if (success && !name) setName(next.name.replace(/\.png$/i, "").slice(0, 40));
   };
 
   const printProfile: PrintProfileConfig | null = useMemo(() => {
@@ -147,14 +169,26 @@ export function FrameUploadForm({
           </label>
 
           {imageUrl && analysis && (
-            <FramePreview
-              imageUrl={imageUrl}
-              width={analysis.width}
-              height={analysis.height}
-              slots={slots}
-              editable
-              onChange={setSlots}
-            />
+            <>
+              <FramePreview
+                imageUrl={imageUrl}
+                width={analysis.width}
+                height={analysis.height}
+                slots={slots}
+                editable
+                onChange={setSlots}
+              />
+              <Button
+                size="xs"
+                variant="secondary"
+                disabled={busy}
+                onClick={() => {
+                  if (file) void analyzeFile(file, category, manySlotCount, false);
+                }}
+              >
+                DETEKSI ULANG SLOT
+              </Button>
+            </>
           )}
           {busy && !analysis && <p className="text-xs">{copy.common.loading}</p>}
         </div>
@@ -219,6 +253,22 @@ export function FrameUploadForm({
               ))}
             </select>
           </label>
+          {category === "MANY" && (
+            <label className="flex flex-col gap-1">
+              <span className="font-display uppercase">Jumlah slot target</span>
+              <select
+                className="border-2 border-ink bg-white px-2 py-1.5"
+                value={manySlotCount}
+                onChange={(event) => setManySlotCount(Number(event.target.value))}
+              >
+                {[4, 5, 6].map((count) => (
+                  <option key={count} value={count}>
+                    {count} slot
+                  </option>
+                ))}
+              </select>
+            </label>
+          )}
 
           <label className="flex items-center gap-2">
             <input

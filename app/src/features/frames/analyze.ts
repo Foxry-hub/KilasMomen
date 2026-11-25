@@ -44,8 +44,50 @@ export interface AnalyzeResult {
   warnings: string[];
 }
 
+function splitDominantSlot(
+  slots: (Slot & { area: number })[],
+  width: number,
+  height: number,
+  targetSlotCount: number,
+  minSide: number
+): (Slot & { area: number })[] {
+  if (slots.length === 0 || targetSlotCount <= slots.length) return slots;
+
+  const axis = height >= width ? "y" : "x";
+  const sizeKey = axis === "y" ? "h" : "w";
+  const candidateIndex = slots.reduce(
+    (best, slot, index) => (slot[sizeKey] > slots[best][sizeKey] ? index : best),
+    0
+  );
+  const candidate = slots[candidateIndex];
+  const pieces = targetSlotCount - slots.length + 1;
+  const span = candidate[sizeKey];
+  const crossSize = axis === "y" ? candidate.w : candidate.h;
+  if (span <= crossSize || span / pieces < minSide) return slots;
+
+  const start = candidate[axis];
+  const split = Array.from({ length: pieces }, (_, index) => {
+    const from = Math.round(start + (index * span) / pieces);
+    const to = Math.round(start + ((index + 1) * span) / pieces);
+    const segmentSize = to - from;
+    return {
+      ...candidate,
+      ...(axis === "y" ? { y: from, h: segmentSize } : { x: from, w: segmentSize }),
+      area: Math.round((candidate.area * segmentSize) / span),
+    };
+  });
+  if (split.some((slot) => slot[sizeKey] < minSide)) return slots;
+
+  const result = [...slots];
+  result.splice(candidateIndex, 1, ...split);
+  return result;
+}
+
 /** Validasi + deteksi slot dari kanal alpha. Melempar `FrameError` bila tidak valid. */
-export async function analyzeFrame(file: Buffer): Promise<AnalyzeResult> {
+export async function analyzeFrame(
+  file: Buffer,
+  targetSlotCount?: number
+): Promise<AnalyzeResult> {
   if (file.length > FRAME_LIMITS.maxBytes) throw new FrameError("TOO_BIG", "Berkas terlalu besar");
 
   const base = sharp(file, { limitInputPixels: FRAME_LIMITS.maxPixels });
@@ -130,6 +172,17 @@ export async function analyzeFrame(file: Buffer): Promise<AnalyzeResult> {
     if (area >= minArea && w >= minSide && h >= minSide) {
       found.push({ x: minX, y: minY, w, h, area });
     }
+  }
+
+  if (
+    targetSlotCount !== undefined &&
+    Number.isInteger(targetSlotCount) &&
+    targetSlotCount > 0 &&
+    targetSlotCount <= 6 &&
+    found.length < targetSlotCount
+  ) {
+    const completed = splitDominantSlot(found, width, height, targetSlotCount, minSide);
+    found.splice(0, found.length, ...completed);
   }
 
   const warnings = found

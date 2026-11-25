@@ -222,12 +222,14 @@ export default function EditorPage() {
     }
   }, [frame, busy, imagesReady, assignments, filter, sessionId, router, donePath]);
 
-  const isPortrait = (frame?.canvasHeight ?? 0) > (frame?.canvasWidth ?? 0);
+  const isPortrait = (frame?.canvasHeight ?? 0) >= (frame?.canvasWidth ?? 0);
   const previewSpan = isPortrait ? "lg:col-span-5" : "lg:col-span-7";
   const gridSpan = isPortrait ? "lg:col-span-7" : "lg:col-span-5";
+  const previewWidthRatio =
+    ((frame?.canvasWidth ?? 4) / (frame?.canvasHeight ?? 3)) * 100;
 
   return (
-    <div className="flex flex-1 flex-col overflow-hidden">
+    <div className="flex min-h-0 flex-1 flex-col overflow-hidden">
       <header className="flex shrink-0 flex-wrap items-center justify-between gap-3 border-b-4 border-ink bg-brand-yellow p-4 lg:p-5">
         <h1 className="font-display text-2xl uppercase tracking-tight lg:text-3xl">
           {copy.kiosk.editor.title}
@@ -235,14 +237,17 @@ export default function EditorPage() {
         <p className="font-sans text-sm text-ink/80">{copy.kiosk.editor.chooseSlot}</p>
       </header>
 
-      <main className="scrollbar-hidden min-h-0 flex-1 overflow-y-auto p-4 lg:p-6">
-        <div className="mx-auto grid w-full max-w-6xl grid-cols-1 gap-5 lg:grid-cols-12">
+      <main className="scrollbar-hidden min-h-0 flex-1 overflow-y-auto p-4 lg:flex lg:overflow-hidden lg:p-0">
+        <div className="mx-auto grid w-full max-w-6xl grid-cols-1 gap-5 lg:min-h-0 lg:flex-1 lg:grid-cols-12 lg:grid-rows-1">
           {/* Pratinjau frame (kiri) */}
-          <section className={`${previewSpan} flex flex-col gap-3`}>
+          <section
+            className={`${previewSpan} [container-type:size] flex h-[60svh] min-h-0 items-center justify-center overflow-hidden p-6 lg:h-auto lg:p-8`}
+          >
             <div
-              className="relative w-full border-4 border-ink bg-white shadow-brut-lg"
+              className="relative max-h-full max-w-full outline outline-4 outline-ink bg-white shadow-brut-lg"
               style={{
                 aspectRatio: `${frame?.canvasWidth ?? 4} / ${frame?.canvasHeight ?? 3}`,
+                width: `min(100cqw, ${previewWidthRatio}cqh)`,
               }}
             >
               {previewSlots.map((rect, i) => {

@@ -24,29 +24,35 @@ const MIN_SIDE_RATIO = 0.05; // 5% sisi terpendek (§6.3.1)
 
 /** Pratinjau overlay + penyesuaian slot di browser operator (§6.3.1). */
 export function FramePreview({ imageUrl, width, height, slots, editable, onChange }: Props) {
+  const boundsRef = useRef<HTMLDivElement>(null);
   const boxRef = useRef<HTMLDivElement>(null);
-  const [dispW, setDispW] = useState(0);
+  const [bounds, setBounds] = useState({ width: 0, height: 0 });
   const drag = useRef<DragState | null>(null);
   const [active, setActive] = useState<number | null>(null);
 
   useEffect(() => {
-    const el = boxRef.current;
+    const el = boundsRef.current;
     if (!el) return;
-    const update = () => setDispW(el.clientWidth);
-    update();
-    const ro = new ResizeObserver(update);
+    const ro = new ResizeObserver(([entry]) => {
+      if (entry) {
+        setBounds({ width: entry.contentRect.width, height: entry.contentRect.height });
+      }
+    });
     ro.observe(el);
     return () => ro.disconnect();
   }, []);
 
-  const scale = width > 0 ? dispW / width : 0;
-  const minSide = MIN_SIDE_RATIO * Math.min(width, height);
+  const scale =
+    width > 0 && height > 0
+      ? Math.min(bounds.width / width, bounds.height / height)
+      : 0;
+  const minSide = Math.ceil(MIN_SIDE_RATIO * Math.min(width, height));
 
   const clamp = (s: Slot): Slot => {
-    const w = Math.max(minSide, Math.min(s.w, width));
-    const h = Math.max(minSide, Math.min(s.h, height));
-    const x = Math.max(0, Math.min(s.x, width - w));
-    const y = Math.max(0, Math.min(s.y, height - h));
+    const w = Math.round(Math.max(minSide, Math.min(s.w, width)));
+    const h = Math.round(Math.max(minSide, Math.min(s.h, height)));
+    const x = Math.round(Math.max(0, Math.min(s.x, width - w)));
+    const y = Math.round(Math.max(0, Math.min(s.y, height - h)));
     return { x, y, w, h };
   };
 
@@ -54,7 +60,7 @@ export function FramePreview({ imageUrl, width, height, slots, editable, onChang
     if (!editable) return;
     e.stopPropagation();
     e.preventDefault();
-    (e.target as Element).setPointerCapture?.(e.pointerId);
+    boxRef.current?.setPointerCapture(e.pointerId);
     drag.current = {
       index,
       mode,
@@ -67,9 +73,10 @@ export function FramePreview({ imageUrl, width, height, slots, editable, onChang
 
   const move = (e: React.PointerEvent) => {
     const d = drag.current;
-    if (!d || scale === 0 || !onChange) return;
-    const dx = (e.clientX - d.startX) / scale;
-    const dy = (e.clientY - d.startY) / scale;
+    const rect = boxRef.current?.getBoundingClientRect();
+    if (!d || !rect || rect.width === 0 || rect.height === 0 || !onChange) return;
+    const dx = ((e.clientX - d.startX) * width) / rect.width;
+    const dy = ((e.clientY - d.startY) * height) / rect.height;
     const next = slots.map((s, i) => {
       if (i !== d.index) return s;
       if (d.mode === "move") {
@@ -87,43 +94,51 @@ export function FramePreview({ imageUrl, width, height, slots, editable, onChang
 
   return (
     <div
-      ref={boxRef}
-      className="relative w-full select-none border-4 border-ink bg-[repeating-conic-gradient(#e5e5e5_0_25%,#ffffff_0_50%)] bg-[length:20px_20px]"
-      style={{ aspectRatio: `${width} / ${height}`, maxHeight: "60svh" }}
-      onPointerMove={move}
-      onPointerUp={end}
-      onPointerLeave={end}
+      ref={boundsRef}
+      className={[
+        "flex w-full items-center justify-center",
+        editable ? "h-[min(70svh,520px)] min-h-[420px]" : "h-[60svh] max-h-[60svh]",
+      ].join(" ")}
     >
-      {/* eslint-disable-next-line @next/next/no-img-element */}
-      <img src={imageUrl} alt="Overlay frame" className="h-full w-full object-contain" />
-      {scale > 0 &&
-        slots.map((s, i) => (
-          <div
-            key={i}
-            className={[
-              "absolute border-2 border-brand-red bg-brand-red/10",
-              editable ? "cursor-move" : "",
-              active === i ? "border-brand-cyan bg-brand-cyan/20" : "",
-            ].join(" ")}
-            style={{
-              left: s.x * scale,
-              top: s.y * scale,
-              width: s.w * scale,
-              height: s.h * scale,
-            }}
-            onPointerDown={(e) => begin(e, i, "move")}
-          >
-            <span className="absolute left-0 top-0 bg-brand-red px-1 font-mono text-[10px] text-white">
-              {i + 1}
-            </span>
-            {editable && (
-              <span
-                className="absolute -bottom-1.5 -right-1.5 h-3 w-3 cursor-nwse-resize border-2 border-ink bg-brand-cyan"
-                onPointerDown={(e) => begin(e, i, "resize")}
-              />
-            )}
-          </div>
-        ))}
+      <div
+        ref={boxRef}
+        className="relative shrink-0 select-none touch-none outline outline-4 outline-ink bg-[repeating-conic-gradient(#e5e5e5_0_25%,#ffffff_0_50%)] bg-[length:20px_20px]"
+        style={{ aspectRatio: `${width} / ${height}`, width: width * scale, height: height * scale }}
+        onPointerMove={move}
+        onPointerUp={end}
+        onPointerCancel={end}
+      >
+        {/* eslint-disable-next-line @next/next/no-img-element */}
+        <img src={imageUrl} alt="Overlay frame" className="absolute inset-0 h-full w-full object-contain" />
+        {scale > 0 &&
+          slots.map((s, i) => (
+            <div
+              key={i}
+              className={[
+                "absolute border-2 border-brand-red bg-brand-red/10",
+                editable ? "cursor-move" : "",
+                active === i ? "border-brand-cyan bg-brand-cyan/20" : "",
+              ].join(" ")}
+              style={{
+                left: `${(s.x / width) * 100}%`,
+                top: `${(s.y / height) * 100}%`,
+                width: `${(s.w / width) * 100}%`,
+                height: `${(s.h / height) * 100}%`,
+              }}
+              onPointerDown={(e) => begin(e, i, "move")}
+            >
+              <span className="absolute left-0 top-0 bg-brand-red px-1 font-mono text-[10px] text-white">
+                {i + 1}
+              </span>
+              {editable && (
+                <span
+                  className="absolute -bottom-1.5 -right-1.5 h-3 w-3 cursor-nwse-resize border-2 border-ink bg-brand-cyan"
+                  onPointerDown={(e) => begin(e, i, "resize")}
+                />
+              )}
+            </div>
+          ))}
+      </div>
     </div>
   );
 }

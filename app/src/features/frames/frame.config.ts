@@ -14,7 +14,7 @@ export const FRAME_LIMITS = {
 
 export const DETECT = {
   alphaTransparentBelow: 10,
-  minAreaRatio: 0.01,
+  minAreaRatio: 0.03,
   minSlotSideRatio: 0.05,
   bleedRatio: 0.002,
   rowToleranceRatio: 0.5,

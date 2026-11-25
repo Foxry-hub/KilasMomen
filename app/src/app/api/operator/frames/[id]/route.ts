@@ -3,12 +3,13 @@ import { badRequest, notFound, requireOperator } from "@/lib/operator-api";
 import { prisma } from "@/lib/prisma";
 import { frameCategorySchema, isValidSlotCountForCategory, type FrameCategory } from "@/lib/constants";
 import {
+  FrameError,
   parseSlotsConfig,
   serializeSlotsConfig,
   type PrintProfileConfig,
   type Slot,
 } from "@/features/frames/analyze";
-import { serializeFrame } from "@/features/frames/frame-service";
+import { normalizeFrameSlots, serializeFrame } from "@/features/frames/frame-service";
 
 /** Ubah metadata/slot/profil frame. Dimensi tidak dapat diubah (§9). */
 export async function PATCH(request: Request, ctx: { params: Promise<{ id: string }> }) {
@@ -41,7 +42,17 @@ export async function PATCH(request: Request, ctx: { params: Promise<{ id: strin
         })();
   if (nextCategory === null) return badRequest("Kategori frame tidak valid");
 
-  const nextSlots: Slot[] = Array.isArray(body.slots) ? (body.slots as Slot[]) : currentSlots;
+  let nextSlots: Slot[];
+  try {
+    nextSlots = normalizeFrameSlots(
+      Array.isArray(body.slots) ? (body.slots as Slot[]) : currentSlots,
+      frame.canvasWidth,
+      frame.canvasHeight
+    );
+  } catch (error) {
+    if (error instanceof FrameError) return badRequest(error.message);
+    throw error;
+  }
   if (!isValidSlotCountForCategory(nextCategory, nextSlots.length)) {
     return badRequest(
       `Jumlah slot ${nextSlots.length} tidak cocok untuk kategori ${nextCategory}`

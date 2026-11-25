@@ -107,14 +107,44 @@ export interface CreateFrameInput {
   print?: PrintProfileConfig;
 }
 
+function targetSlotsForCategory(category: FrameCategory, requested?: number): number | undefined {
+  if (category === "TWO") return 2;
+  if (category === "THREE") return 3;
+  return requested && isValidSlotCountForCategory(category, requested) ? requested : undefined;
+}
+
+export function normalizeFrameSlots(slots: Slot[], width: number, height: number): Slot[] {
+  return slots.map((slot) => {
+    if (!slot || ![slot.x, slot.y, slot.w, slot.h].every(Number.isFinite)) {
+      throw new FrameError("SLOT_INVALID", "Koordinat slot tidak valid");
+    }
+
+    const w = Math.max(0, Math.min(width, Math.round(slot.w)));
+    const h = Math.max(0, Math.min(height, Math.round(slot.h)));
+    return {
+      x: Math.max(0, Math.min(width - w, Math.round(slot.x))),
+      y: Math.max(0, Math.min(height - h, Math.round(slot.y))),
+      w,
+      h,
+    };
+  });
+}
+
 function sanitizeName(name: string): string {
   const clean = name.replace(/[<>]/g, "").trim().slice(0, 60);
   return clean || "Frame";
 }
 
 /** Analisis berkas tanpa menyimpan (§9 `/frames/analyze`). */
-export async function analyzeUpload(file: Buffer, category?: FrameCategory) {
-  const result = await analyzeFrame(file);
+export async function analyzeUpload(
+  file: Buffer,
+  category?: FrameCategory,
+  requestedSlotCount?: number
+) {
+  const result = await analyzeFrame(
+    file,
+    category ? targetSlotsForCategory(category, requestedSlotCount) : requestedSlotCount
+  );
   const ctx = await getFrameContext();
   const analysis: FrameAnalysis = buildAnalysis(result, ctx.activePaper, ctx.minDpiWarn, ctx.camera);
   if (category) {
@@ -130,10 +160,17 @@ export async function analyzeUpload(file: Buffer, category?: FrameCategory) {
 
 export async function createFrame(input: CreateFrameInput): Promise<Frame> {
   const ctx = await getFrameContext();
-  const result = await analyzeFrame(input.file);
+  const result = await analyzeFrame(
+    input.file,
+    targetSlotsForCategory(input.category, input.slots?.length)
+  );
 
-  // Sumber kebenaran: selalu analisis ulang dan abaikan dimensi/slot klien.
-  const slots = input.slots?.length ? input.slots : result.slots;
+  // Dimensi selalu berasal dari PNG; slot dari klien dinormalisasi ke piksel kanvas.
+  const slots = normalizeFrameSlots(
+    input.slots?.length ? input.slots : result.slots,
+    result.width,
+    result.height
+  );
   const slotCount = slots.length;
   if (!isValidSlotCountForCategory(input.category, slotCount)) {
     throw new FrameError(
